@@ -64,9 +64,12 @@ def upload_short_to_youtube(
             if not access_token:
                 log.error("Failed to obtain access token from OAuth refresh endpoint.")
                 return None
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        log.error(f"Failed to refresh YouTube access token ({e.code} {e.reason}): {body}")
+        return None
     except Exception as e:
-        # Avoid leaking client_secret in error message
-        log.error(f"Failed to refresh YouTube access token: OAuth exchange error.")
+        log.error(f"Failed to refresh YouTube access token: OAuth exchange error: {e}")
         return None
 
     # 2. Upload video file via Resumable Upload

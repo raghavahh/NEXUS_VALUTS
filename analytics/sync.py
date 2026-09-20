@@ -50,6 +50,10 @@ def _refresh_oauth_token() -> Optional[str]:
         with urllib.request.urlopen(req, timeout=12) as resp:
             token_data = json.loads(resp.read().decode("utf-8"))
             return token_data.get("access_token") or None
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        log.warning(f"[ANALYTICS] OAuth token refresh failed ({e.code} {e.reason}): {body}")
+        return None
     except Exception as e:
         log.warning(f"[ANALYTICS] OAuth token refresh notice: {e}")
         return None

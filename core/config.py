@@ -56,6 +56,14 @@ def _mask_secret(val: Optional[str]) -> str:
         return "***"
     return f"{val[:4]}...{val[-4:]}"
 
+def _clean_str(val: Optional[str], default: str = "") -> str:
+    if val is None:
+        return default
+    v = str(val).strip()
+    if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+        v = v[1:-1].strip()
+    return v or default
+
 def _parse_bool(val: str, default: bool = False) -> bool:
     if val is None:
         return default
@@ -76,27 +84,27 @@ class AIConfig:
     request_timeout: int = int(os.getenv("AI_REQUEST_TIMEOUT", "30"))
     max_retries: int = int(os.getenv("AI_MAX_RETRIES", "1"))
 
-    gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
-    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+    gemini_api_key: str = _clean_str(os.getenv("GEMINI_API_KEY", ""))
+    gemini_model: str = _clean_str(os.getenv("GEMINI_MODEL", "gemini-3.5-flash"))
     gemini_api_url: str = os.getenv("GEMINI_API_URL", "https://generativelanguage.googleapis.com/v1beta")
 
-    nvidia_api_key: str = os.getenv("NVIDIA_API_KEY", "")
-    nvidia_model: str = os.getenv("NVIDIA_MODEL", "nvidia/nemotron-3-super-120b-a12b")
+    nvidia_api_key: str = _clean_str(os.getenv("NVIDIA_API_KEY", ""))
+    nvidia_model: str = _clean_str(os.getenv("NVIDIA_MODEL", "nvidia/nemotron-3-super-120b-a12b"))
     nvidia_api_url: str = os.getenv("NVIDIA_API_URL", "https://integrate.api.nvidia.com/v1")
 
-    groq_api_key: str = os.getenv("GROQ_API_KEY", "")
-    groq_model: str = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
+    groq_api_key: str = _clean_str(os.getenv("GROQ_API_KEY", ""))
+    groq_model: str = _clean_str(os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b"))
     groq_api_url: str = os.getenv("GROQ_API_URL", "https://api.groq.com/openai/v1")
 
-    openrouter_api_key: str = os.getenv("OPENROUTER_API_KEY", "")
-    openrouter_model: str = os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3-super-120b-a12b:free")
+    openrouter_api_key: str = _clean_str(os.getenv("OPENROUTER_API_KEY", ""))
+    openrouter_model: str = _clean_str(os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3-super-120b-a12b:free"))
     openrouter_api_url: str = os.getenv("OPENROUTER_API_URL", "https://openrouter.ai/api/v1")
 
 @dataclass(frozen=True)
 class YouTubeConfig:
-    client_id: str = os.getenv("YT_CLIENT_ID", "")
-    client_secret: str = os.getenv("YT_CLIENT_SECRET", "")
-    refresh_token: str = os.getenv("YT_REFRESH_TOKEN", "")
+    client_id: str = _clean_str(os.getenv("YT_CLIENT_ID", ""))
+    client_secret: str = _clean_str(os.getenv("YT_CLIENT_SECRET", ""))
+    refresh_token: str = _clean_str(os.getenv("YT_REFRESH_TOKEN", ""))
     category_id: str = os.getenv("YOUTUBE_CATEGORY_ID", "28")
     default_language: str = os.getenv("YOUTUBE_DEFAULT_LANGUAGE", "en")
     upload_privacy: str = os.getenv("YOUTUBE_UPLOAD_PRIVACY", "private")

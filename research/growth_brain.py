@@ -107,8 +107,27 @@ def produce_growth_brain(candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     # Rank novel candidates
     ranked = sorted(novel_candidates, key=score_candidate, reverse=True)
-    winner = ranked[0]
-    log.info(f"Selected winning topic: '{winner['title']}' (Cluster: {winner['cluster']})")
+    
+    # Visual budget pre-flight: select highest-scoring candidate that has sufficient
+    # authentic archival evidence in Wikipedia (>= 3 article images) to satisfy PRD Section 6
+    # (>= 4 authentic archival assets, <= 3 generated graphics across 12 scenes).
+    winner = None
+    for cand in ranked:
+        try:
+            from media.images import fetch_wikipedia_article_images
+            imgs = fetch_wikipedia_article_images(cand["title"])
+            if len(imgs) >= 3:
+                winner = cand
+                log.info(f"Selected visually rich winning topic: '{winner['title']}' ({len(imgs)} article images, Cluster: {winner['cluster']})")
+                break
+            else:
+                log.info(f"Skipping candidate '{cand['title']}' due to sparse archival imagery ({len(imgs)} images < 3)")
+        except Exception:
+            pass
+
+    if not winner:
+        winner = ranked[0]
+        log.info(f"Selected winning topic: '{winner['title']}' (Cluster: {winner['cluster']})")
     
     # Gather YouTube competitor intelligence
     intel = sample_competitor_shorts(winner["title"])
