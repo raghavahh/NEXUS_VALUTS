@@ -54,13 +54,23 @@ def extract_json(raw: str) -> str:
                 pass
             pos = idx + 1
 
-    # 3. Fallback to outer braces
+    # 3. Fallback to outer braces or square brackets
     first_brace = clean.find("{")
     last_brace = clean.rfind("}")
+    first_bracket = clean.find("[")
+    last_bracket = clean.rfind("]")
+
+    candidates = []
+    if first_bracket != -1 and last_bracket != -1 and (first_brace == -1 or first_bracket < first_brace):
+        candidates.append(clean[first_bracket:last_bracket + 1].strip())
     if first_brace != -1 and last_brace != -1:
-        candidate = clean[first_brace:last_brace + 1].strip()
+        candidates.append(clean[first_brace:last_brace + 1].strip())
+    if first_bracket != -1 and last_bracket != -1 and clean[first_bracket:last_bracket + 1].strip() not in candidates:
+        candidates.append(clean[first_bracket:last_bracket + 1].strip())
+
+    for candidate in candidates:
         try:
-            json.loads(candidate)
+            json.loads(candidate, strict=False)
             return candidate
         except Exception:
             try:
@@ -68,7 +78,10 @@ def extract_json(raw: str) -> str:
                 if isinstance(parsed, (dict, list)):
                     return json.dumps(parsed)
             except Exception:
-                return candidate
+                pass
+
+    if candidates:
+        return candidates[0]
 
     # 4. Fallback to ast.literal_eval for single-quoted Python dicts/lists
     try:

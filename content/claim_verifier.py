@@ -21,6 +21,7 @@ DESIGN RULES:
 """
 
 import json
+import re
 from typing import List, Dict, Any
 from core.llm_router import route_task, extract_json
 from core.logging import log
@@ -64,6 +65,64 @@ Rules:
 - Do not invent supporting evidence. Quote the nearest relevant passage verbatim.
 - Ignore the closing channel sign-off signature 'NEXUS VAULTS.' as it is a brand sign-off, not an empirical historical claim.
 """
+
+
+def _parse_claim_verdicts(raw: str) -> List[Dict[str, Any]]:
+    """Robustly parses claim verdicts from LLM output using strict=False and regex recovery."""
+    if not raw:
+        return []
+    clean = extract_json(raw)
+    verdicts: List[Dict[str, Any]] = []
+
+    # 1. Standard JSON decode (strict=False permits unescaped newlines/control chars)
+    try:
+        parsed = json.loads(clean, strict=False)
+        if isinstance(parsed, list):
+            verdicts = parsed
+        elif isinstance(parsed, dict):
+            if "sentence" in parsed and "verdict" in parsed:
+                verdicts = [parsed]
+            else:
+                for key in ("verdicts", "claims", "sentences", "results", "audit", "items"):
+                    if key in parsed and isinstance(parsed[key], list):
+                        verdicts = parsed[key]
+                        break
+                if not verdicts:
+                    for v in parsed.values():
+                        if isinstance(v, list) and v and isinstance(v[0], dict) and "verdict" in v[0]:
+                            verdicts = v
+                            break
+    except Exception:
+        pass
+
+    # 2. Regex recovery for unescaped inner quotes or malformed JSON objects
+    if not verdicts:
+        try:
+            object_matches = re.findall(r'\{([^{}]+)\}', clean or raw, re.DOTALL)
+            for obj_str in object_matches:
+                s_match = re.search(r'["\']sentence["\']\s*:\s*["\'](.*?)["\']\s*,\s*["\']verdict["\']', obj_str, re.DOTALL)
+                sentence = s_match.group(1).strip() if s_match else ""
+
+                v_match = re.search(r'["\']verdict["\']\s*:\s*["\'](SUPPORTED|PARTIALLY_SUPPORTED|UNSUPPORTED)["\']', obj_str, re.IGNORECASE)
+                verdict = v_match.group(1).strip().upper() if v_match else ""
+
+                e_match = re.search(r'["\']source_evidence["\']\s*:\s*(?:["\'](.*?)["\']\s*(?:,\s*["\']|(?:\n\s*\}|\}\s*$))|null)', obj_str, re.DOTALL)
+                evidence = e_match.group(1).strip() if (e_match and e_match.group(1)) else None
+
+                n_match = re.search(r'["\']note["\']\s*:\s*["\'](.*?)["\']', obj_str, re.DOTALL)
+                note = n_match.group(1).strip() if n_match else ""
+
+                if sentence and verdict:
+                    verdicts.append({
+                        "sentence": sentence,
+                        "verdict": verdict,
+                        "source_evidence": evidence,
+                        "note": note
+                    })
+        except Exception:
+            pass
+
+    return verdicts
 
 
 def verify_script_claims(
@@ -116,27 +175,25 @@ def verify_script_claims(
 
     verdicts: List[Dict[str, Any]] = []
     try:
-        raw = route_task(prompt, task_type="story",
-                         system_instruction="You are a strict factual accuracy auditor. Output only valid JSON.")
-        clean = extract_json(raw)
-        parsed = json.loads(clean)
-        if isinstance(parsed, list):
-            verdicts = parsed
-        elif isinstance(parsed, dict):
-            if "sentence" in parsed and "verdict" in parsed:
-                verdicts = [parsed]
-            else:
-                for key in ("verdicts", "claims", "sentences", "results", "audit", "items"):
-                    if key in parsed and isinstance(parsed[key], list):
-                        verdicts = parsed[key]
-                        break
-                if not verdicts:
-                    for v in parsed.values():
-                        if isinstance(v, list) and v and isinstance(v[0], dict) and "verdict" in v[0]:
-                            verdicts = v
-                            break
-            if not verdicts:
-                verdicts = []
+        raw = route_task(
+            prompt,
+            task_type="claim_verification",
+            system_instruction="You are a strict factual accuracy auditor. Output only valid JSON."
+        )
+        verdicts = _parse_claim_verdicts(raw)
+
+        if not verdicts:
+            log.warning("[CLAIM VERIFIER] Initial claim parse yielded 0 verdicts. Retrying with secondary provider pass...")
+            retry_prompt = (
+                prompt
+                + "\n\nCRITICAL: Output ONLY a valid JSON array of objects without Markdown formatting or unescaped quotes."
+            )
+            raw_retry = route_task(
+                retry_prompt,
+                task_type="formatting",
+                system_instruction="Strict factual accuracy auditor. Raw valid JSON array only."
+            )
+            verdicts = _parse_claim_verdicts(raw_retry)
     except Exception as e:
         # PRD Phase 10: a failed audit is NOT a pass. Surface the failure so the
         # caller defers production instead of publishing unaudited narration.

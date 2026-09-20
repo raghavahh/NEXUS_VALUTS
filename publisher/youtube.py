@@ -52,7 +52,10 @@ def upload_short_to_youtube(
         req = urllib.request.Request(
             token_url,
             data=payload,
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
             method="POST"
         )
         with urllib.request.urlopen(req, timeout=15) as resp:

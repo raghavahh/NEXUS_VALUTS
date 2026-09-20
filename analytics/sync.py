@@ -41,14 +41,17 @@ def _refresh_oauth_token() -> Optional[str]:
         req = urllib.request.Request(
             "https://oauth2.googleapis.com/token",
             data=payload,
-            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
             method="POST"
         )
         with urllib.request.urlopen(req, timeout=12) as resp:
             token_data = json.loads(resp.read().decode("utf-8"))
             return token_data.get("access_token") or None
     except Exception as e:
-        log.debug(f"OAuth token refresh notice: {e}")
+        log.warning(f"[ANALYTICS] OAuth token refresh notice: {e}")
         return None
 
 
