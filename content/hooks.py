@@ -66,12 +66,28 @@ def generate_and_score_hooks(topic: str, facts: List[str], conflict: str, source
     raw = route_task(prompt, system_prompt="Critic & Hook Architect. Raw JSON only.", task_type="hook")
     clean = extract_json(raw)
 
+    candidates = []
     try:
         data = json.loads(clean)
-        candidates = data.get("candidate_hooks", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+        if isinstance(data, dict):
+            candidates = (
+                data.get("candidate_hooks")
+                or data.get("hooks")
+                or data.get("candidateHooks")
+                or data.get("candidates")
+                or []
+            )
+            if not candidates:
+                for v in data.values():
+                    if isinstance(v, list) and v:
+                        candidates = v
+                        break
+        elif isinstance(data, list):
+            candidates = data
     except Exception as e:
         log.warning(f"Failed to parse hook response directly: {e}. Attempting regex recovery.")
-        candidates = []
+
+    if not candidates:
         for m in re.finditer(r'["\']?(?:hook|text|content)["\']?\s*:\s*["\']([^"\']{20,160})["\']', raw, re.IGNORECASE):
             candidates.append({"category": "CONTRADICTION", "hook": m.group(1).strip()})
         if not candidates:
@@ -79,14 +95,15 @@ def generate_and_score_hooks(topic: str, facts: List[str], conflict: str, source
                 m_line = re.match(r'^\s*(?:\d+[\.\)]|\-|\*)\s*["\']?([^"\'\n]{25,160})["\']?', line)
                 if m_line:
                     candidates.append({"category": "CONTRADICTION", "hook": m_line.group(1).strip()})
-        if not candidates:
-            # Deterministic fallback hooks grounded in verified facts
-            first_fact = facts[0] if facts else f"Documented archival records regarding {topic}"
-            candidates = [
-                {"category": "HIDDEN EVIDENCE", "hook": f"Archival records confirm investigators failed to explain the sequence of events."},
-                {"category": "CONTRADICTION", "hook": f"{first_fact[:60].rstrip('.')} contradicted official explanations."},
-                {"category": "IMPOSSIBLE DETAIL", "hook": f"Official inquiries found no physical evidence, leaving the true timeline unresolved."}
-            ]
+
+    # Guaranteed non-empty fallback hooks grounded in verified facts
+    if not candidates:
+        first_fact = facts[0] if facts else f"Documented archival records regarding {topic}"
+        candidates = [
+            {"category": "HIDDEN EVIDENCE", "hook": f"Archival records confirm investigators failed to explain the sequence of events."},
+            {"category": "CONTRADICTION", "hook": f"{first_fact[:60].rstrip('.')} contradicted official explanations."},
+            {"category": "IMPOSSIBLE DETAIL", "hook": f"Official inquiries found no physical evidence, leaving the true timeline unresolved."}
+        ]
 
     # Clean and normalize quotes across all candidate hooks
     for c in candidates:

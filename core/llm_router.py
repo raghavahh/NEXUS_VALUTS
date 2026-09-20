@@ -138,6 +138,8 @@ def call_openrouter(prompt: str, system_prompt: str = "", task_type: str = "gene
             log.warning(f"OpenRouter ({model}) HTTP {e.code}: {e.reason}")
             if e.code in (401, 403):
                 return None
+            elif e.code == 429:
+                time.sleep(2.0)
             continue
         except Exception as e:
             log.warning(f"OpenRouter ({model}) error: {e}")
@@ -201,6 +203,8 @@ def call_groq(prompt: str, system_prompt: str = "", task_type: str = "general") 
             log.warning(f"Groq ({current_model}) HTTP {e.code}: {e.reason}")
             if e.code in (401, 403):
                 return None
+            elif e.code == 429:
+                time.sleep(2.0)
             continue
         except Exception as e:
             log.warning(f"Groq ({current_model}) error: {e}")

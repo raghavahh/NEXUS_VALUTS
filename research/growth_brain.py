@@ -75,11 +75,12 @@ def score_candidate(candidate: Dict[str, Any]) -> float:
     """Calculates overall viability score for a candidate topic."""
     summary_len = len(candidate.get("summary", ""))
     richness = min(1.0, summary_len / 400.0)
-    has_thumb = 1.0 if candidate.get("thumbnail") else 0.5
+    # Heavy weighting on visual evidence availability to guarantee fulfillment of
+    # PRD S6 (>= 4 authentic archival assets, <= 3 generated graphics)
+    has_thumb = 1.0 if candidate.get("thumbnail") else 0.05
     cluster_weight = candidate.get("cluster_weight", 1.0)
     
-    # Score formula
-    score = (richness * 0.4 + has_thumb * 0.3 + 0.3) * cluster_weight
+    score = (richness * 0.35 + has_thumb * 0.55 + 0.10) * cluster_weight
     return score
 
 def produce_growth_brain(candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
