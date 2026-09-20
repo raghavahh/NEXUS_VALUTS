@@ -492,10 +492,11 @@ def collect_storyboard_assets(
             if cand["canonical_url"] in used_urls:
                 continue
 
-            # Tier 5 dedup: normalized title (prevents same-named asset variants)
+            # Title check: Only flag identical titles if the title is long and specific (>25 chars)
+            # Short generic titles (e.g. 'Antikythera Mechanism', 'Map of Bermuda') are common across distinct files.
             cand_title_key = normalize_title(cand.get("title", ""))
-            if cand_title_key and cand_title_key in used_titles:
-                log.warning(f"Rejected duplicate-title asset ({cand['title'][:35]}) by normalized-title match")
+            if cand_title_key and len(cand_title_key) > 25 and cand_title_key in used_titles:
+                log.warning(f"Rejected exact-duplicate long-title asset ({cand['title'][:35]}) by title match")
                 continue
 
             # Log candidate evaluation
@@ -559,10 +560,67 @@ def collect_storyboard_assets(
                     log.debug(f"Perceptual check error: {e}")
                     continue
 
-        # SECTION 20: VISUAL FAILURE STATE -> Produce Truthful Explanatory Graphic
-        # If no authentic archival asset passed the hard gate, produce a dedicated technical exhibit graphic
+        # If initial candidate queue exhausted without acceptance, perform Round 2 Search Broadening
         if not accepted or not target_path.exists():
-            log.info(f"Scene {scene_id:02d} [{vtype}]: No external asset passed hard gate ({min_relevance:.2f}). Generating truthful explanatory graphic for '{primary_subj}'...")
+            broad_queries = [
+                f"{topic} historical archive",
+                f"{topic} photograph",
+                f"{topic} document"
+            ]
+            round2_cands = []
+            for bq in broad_queries:
+                for r in search_commons_query(bq, limit=5):
+                    if (r["canonical_url"] not in used_urls
+                            and not any(c["canonical_url"] == r["canonical_url"] for c in candidate_queue)
+                            and not any(c["canonical_url"] == r["canonical_url"] for c in round2_cands)):
+                        round2_cands.append(r)
+                if len(round2_cands) >= 6:
+                    break
+
+            if round2_cands:
+                log.info(f"Scene {scene_id:02d}: Broadening search with {len(round2_cands)} Round 2 archive candidates...")
+                r2_evaluated = []
+                for cand in round2_cands:
+                    score, breakdown = evaluate_semantic_relevance(cand, scene, topic)
+                    r2_evaluated.append((score, breakdown, cand))
+                r2_evaluated.sort(key=lambda x: x[0], reverse=True)
+
+                for score, breakdown, cand in r2_evaluated:
+                    if cand["canonical_url"] in used_urls or score < min_relevance:
+                        continue
+                    qa_ok, qa_reason = verify_asset_semantic_qa(primary_subj, claim, cand, vtype)
+                    if not qa_ok:
+                        continue
+                    if download_candidate(cand["url"], temp_test_path):
+                        file_sha = compute_sha256(temp_test_path)
+                        if config.scene.dedup_sha_enabled and file_sha in used_shas:
+                            temp_test_path.unlink(missing_ok=True)
+                            continue
+                        try:
+                            ph = compute_dhash(temp_test_path)
+                            if any(hamming_distance(ph, pph) <= config.scene.dedup_hamming_threshold for pph in used_phashes):
+                                temp_test_path.unlink(missing_ok=True)
+                                continue
+                            shutil.move(str(temp_test_path), str(target_path))
+                            used_urls.add(cand["canonical_url"])
+                            used_shas.add(file_sha)
+                            used_phashes.append(ph)
+                            cand["sha256"] = file_sha
+                            cand["phash"] = hex(ph)
+                            cand["relevance_score"] = score
+                            cand["relevance_breakdown"] = breakdown
+                            assigned_meta = cand
+                            accepted = True
+                            log.info(f"Scene {scene_id:02d} [{vtype}]: Assigned Round-2 authentic {cand['source']} -> {cand['title'][:45]} (Relevance: {score})")
+                            break
+                        except Exception:
+                            temp_test_path.unlink(missing_ok=True)
+                            continue
+
+        # SECTION 20: VISUAL FAILURE STATE -> Produce Truthful Explanatory Graphic
+        # If genuine search exhaustion occurs after all rounds, produce a dedicated technical exhibit graphic
+        if not accepted or not target_path.exists():
+            log.info(f"Scene {scene_id:02d} [{vtype}]: Genuine search space exhaustion ({min_relevance:.2f}). Generating truthful explanatory graphic for '{primary_subj}'...")
             assigned_meta = create_truthful_explanatory_graphic(scene, target_path, topic=topic)
             file_sha = compute_sha256(target_path)
             ph = compute_dhash(target_path)
