@@ -52,6 +52,7 @@ jobs:
       SCHEDULE_TIMEZONE: America/New_York
       SCHEDULE_TZ: America/New_York
       PYTHONUNBUFFERED: "1"
+      PYTHONIOENCODING: "utf-8"
 
       # ---- AI Routing & Explicit Stable Model Architecture ----
       AI_PROVIDER_CHAIN: nvidia,groq,gemini,openrouter

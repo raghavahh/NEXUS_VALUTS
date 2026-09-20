@@ -6,6 +6,18 @@ import sys
 import logging
 from datetime import datetime
 
+# Windows GitHub Actions runner console uses cp1252 by default; ensure UTF-8 output
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+if hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 class NexusFormatter(logging.Formatter):
     GREY = "\x1b[38;20m"
     CYAN = "\x1b[36;20m"
