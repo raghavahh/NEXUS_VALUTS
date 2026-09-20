@@ -130,6 +130,35 @@ class MediaPreflightAndContractsTest(unittest.TestCase):
         self.assertEqual(verdicts[1]["verdict"], "PARTIALLY_SUPPORTED")
         self.assertEqual(verdicts[2]["verdict"], "UNSUPPORTED")
 
+    def test_visual_asset_replacement_loop(self):
+        """Proves that a rejected visual candidate moves to the next candidate without rejecting the scene."""
+        from media.images import evaluate_semantic_relevance
+        scene = {
+            "scene_id": 4,
+            "primary_visual_subject": "survivor liferaft",
+            "claim": "The lone survivor drifted across the Atlantic.",
+            "visual_type": "ARCHIVAL_PHOTO"
+        }
+        # Candidate 1: Irrelevant portrait
+        cand_portrait = {
+            "title": "File:Portrait_Of_Author.jpg",
+            "description": "Studio portrait of the author in formal attire.",
+            "source": "WIKIMEDIA_COMMONS",
+            "canonical_url": "http://img1.jpg"
+        }
+        # Candidate 2: Relevant liferaft
+        cand_liferaft = {
+            "title": "File:Steven_Callahan_Liferaft_At_Sea.jpg",
+            "description": "Historical photograph of the rubber liferaft used by survivor Steven Callahan drifting across the Atlantic ocean.",
+            "source": "Wikimedia Commons",
+            "canonical_url": "http://img2.jpg"
+        }
+        score1, _ = evaluate_semantic_relevance(cand_portrait, scene, "Steven Callahan")
+        score2, _ = evaluate_semantic_relevance(cand_liferaft, scene, "Steven Callahan")
+
+        self.assertLess(score1, 0.60, "Irrelevant portrait should score below min relevance.")
+        self.assertGreaterEqual(score2, 0.60, "Relevant liferaft should score above min relevance.")
+
 
 if __name__ == "__main__":
     unittest.main()

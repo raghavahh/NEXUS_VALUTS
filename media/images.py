@@ -498,11 +498,16 @@ def collect_storyboard_assets(
                 log.warning(f"Rejected duplicate-title asset ({cand['title'][:35]}) by normalized-title match")
                 continue
 
-            # HARD RELEVANCE GATE: Reject anything below minimum
+            # Log candidate evaluation
             if score < min_relevance:
+                log.debug(
+                    f"Scene {scene_id:02d} | Candidate '{cand.get('title','')[:40]}' | "
+                    f"URL: {cand.get('canonical_url','')} | REJECTED: Low relevance ({score:.2f} < {min_relevance:.2f})"
+                )
                 continue
 
-            if tested_qa_count >= max(3, config.scene.max_candidates_per_scene):
+            # Allow testing up to 8 valid candidates per scene to prevent premature fallback
+            if tested_qa_count >= 8:
                 break
             tested_qa_count += 1
 
