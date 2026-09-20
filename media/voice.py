@@ -28,6 +28,7 @@ async def generate_speech_async(text: str, output_audio_path: Path) -> List[Dict
 
     
     word_timings = []
+    sentence_fallback_timings = []
     
     with open(output_audio_path, "wb") as audio_file:
         async for chunk in communicate.stream():
@@ -42,7 +43,7 @@ async def generate_speech_async(text: str, output_audio_path: Path) -> List[Dict
                     "end": round(start_sec + duration_sec, 3)
                 })
             elif chunk["type"] == "SentenceBoundary":
-                # Interpolate words accurately across sentence duration
+                # Fallback interpolation in case WordBoundary is not emitted
                 sentence_text = chunk.get("text", "")
                 words = sentence_text.strip().split()
                 if words:
@@ -53,13 +54,17 @@ async def generate_speech_async(text: str, output_audio_path: Path) -> List[Dict
                     for w in words:
                         char_weight = len(w) / max(1, total_chars)
                         w_duration = max(0.15, sent_duration * char_weight)
-                        word_timings.append({
+                        sentence_fallback_timings.append({
                             "word": w,
                             "start": round(curr_time, 3),
                             "end": round(curr_time + w_duration, 3)
                         })
                         curr_time += w_duration
                 
+    if not word_timings and sentence_fallback_timings:
+        log.info(f"Using sentence fallback word boundaries ({len(sentence_fallback_timings)} words).")
+        word_timings = sentence_fallback_timings
+
     log.info(f"Generated audio ({output_audio_path.name}) with {len(word_timings)} timed word boundaries.")
     return word_timings
 

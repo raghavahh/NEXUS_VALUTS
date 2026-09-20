@@ -11,6 +11,7 @@ import sqlite3
 from typing import Dict, Any, Tuple, Optional
 from core.config import config
 from core.logging import log
+from core.database import get_connection
 
 def get_production_timezone() -> zoneinfo.ZoneInfo:
     """Returns the configured US timezone."""
@@ -28,19 +29,17 @@ def get_production_clock() -> datetime:
 def get_latest_upload_time() -> Optional[datetime]:
     """Retrieves the timestamp of the most recent uploaded/scheduled video from SQLite."""
     try:
-        db_path = config.storage.database_path
-        if not db_path.exists():
+        if not config.storage.database_path.exists():
             return None
-        conn = sqlite3.connect(str(db_path))
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT published_at, scheduled_publish_at
-            FROM videos
-            WHERE youtube_video_id IS NOT NULL
-            ORDER BY id DESC LIMIT 1
-        """)
-        row = cur.fetchone()
-        conn.close()
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT published_at, scheduled_publish_at
+                FROM videos
+                WHERE youtube_video_id IS NOT NULL
+                ORDER BY id DESC LIMIT 1
+            """)
+            row = cur.fetchone()
         if not row:
             return None
         raw_ts = row[1] or row[0]
@@ -95,15 +94,13 @@ def get_schedule_window(target_tomorrow: bool = True) -> Dict[str, Any]:
     else:
         # If DB has existing uploads but parse failed, advance target +1 day conservatively
         try:
-            db_p = config.storage.database_path
-            if db_p.exists():
-                conn = sqlite3.connect(str(db_p))
-                cur = conn.cursor()
-                cur.execute("SELECT COUNT(*) FROM videos WHERE youtube_video_id IS NOT NULL")
-                if cur.fetchone()[0] > 0:
-                    log.warning("Database contains uploaded video(s) but latest upload time was unparseable. Advancing target slot +1 day conservatively.")
-                    target_upload += timedelta(days=1)
-                conn.close()
+            if config.storage.database_path.exists():
+                with get_connection() as conn:
+                    cur = conn.cursor()
+                    cur.execute("SELECT COUNT(*) FROM videos WHERE youtube_video_id IS NOT NULL")
+                    if cur.fetchone()[0] > 0:
+                        log.warning("Database contains uploaded video(s) but latest upload time was unparseable. Advancing target slot +1 day conservatively.")
+                        target_upload += timedelta(days=1)
         except Exception:
             pass
 

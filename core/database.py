@@ -13,7 +13,8 @@ from core.config import config
 from core.logging import log
 
 def get_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(config.storage.database_path)
+    conn = sqlite3.connect(config.storage.database_path, timeout=15.0)
+    conn.execute("PRAGMA journal_mode=WAL;")
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -441,12 +442,25 @@ def record_content_memory(
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-        INSERT OR REPLACE INTO content_memory (
+        INSERT INTO content_memory (
             file_number, title, main_key_point, story_summary,
-            content_pillar, duration_sec, youtube_video_id, status
+            content_pillar, duration_sec, youtube_video_id, status, published_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (file_number, title, main_key_point, story_summary, content_pillar, duration_sec, youtube_video_id, status))
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, CASE WHEN ? IS NOT NULL THEN CURRENT_TIMESTAMP ELSE NULL END)
+        ON CONFLICT(file_number) DO UPDATE SET
+            title = excluded.title,
+            main_key_point = excluded.main_key_point,
+            story_summary = excluded.story_summary,
+            content_pillar = excluded.content_pillar,
+            duration_sec = excluded.duration_sec,
+            youtube_video_id = COALESCE(excluded.youtube_video_id, content_memory.youtube_video_id),
+            status = excluded.status,
+            published_at = CASE 
+                WHEN excluded.youtube_video_id IS NOT NULL AND content_memory.published_at IS NULL 
+                THEN CURRENT_TIMESTAMP 
+                ELSE content_memory.published_at 
+            END
+        """, (file_number, title, main_key_point, story_summary, content_pillar, duration_sec, youtube_video_id, status, youtube_video_id))
         conn.commit()
         return cursor.lastrowid
 

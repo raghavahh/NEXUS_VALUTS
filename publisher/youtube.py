@@ -9,6 +9,7 @@ Supports Scheduled Publication via status.publishAt with privacyStatus=private.
 import json
 import urllib.request
 import urllib.parse
+import urllib.error
 from pathlib import Path
 from typing import Dict, Any, Optional
 from core.config import config
@@ -105,23 +106,49 @@ def upload_short_to_youtube(
             log.error("Failed to retrieve resumable upload URL.")
             return None
 
+        total_size = video_path.stat().st_size
+        chunk_size = 5 * 1024 * 1024  # 5 MB chunks (multiple of 256 KB)
+        offset = 0
+        video_id = None
+
         with open(video_path, "rb") as f:
-            video_bytes = f.read()
-
-        upload_req = urllib.request.Request(
-            upload_url,
-            data=video_bytes,
-            headers={
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "video/mp4",
-                "Content-Length": str(len(video_bytes))
-            },
-            method="PUT"
-        )
-
-        with urllib.request.urlopen(upload_req, timeout=120) as final_resp:
-            result = json.loads(final_resp.read().decode("utf-8"))
-            video_id = result.get("id")
+            while offset < total_size:
+                chunk = f.read(chunk_size)
+                if not chunk:
+                    break
+                start_byte = offset
+                end_byte = offset + len(chunk) - 1
+                chunk_headers = {
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "video/mp4",
+                    "Content-Length": str(len(chunk)),
+                    "Content-Range": f"bytes {start_byte}-{end_byte}/{total_size}"
+                }
+                upload_req = urllib.request.Request(
+                    upload_url,
+                    data=chunk,
+                    headers=chunk_headers,
+                    method="PUT"
+                )
+                try:
+                    with urllib.request.urlopen(upload_req, timeout=120) as resp:
+                        if resp.status in (200, 201):
+                            result = json.loads(resp.read().decode("utf-8"))
+                            video_id = result.get("id")
+                            break
+                except urllib.error.HTTPError as e:
+                    if e.code == 308:
+                        # Resume Incomplete: extract acknowledged range
+                        range_hdr = e.headers.get("Range")
+                        if range_hdr and "-" in range_hdr:
+                            offset = int(range_hdr.split("-")[-1]) + 1
+                        else:
+                            offset = end_byte + 1
+                        f.seek(offset)
+                    else:
+                        raise e
+                else:
+                    offset = end_byte + 1
 
         if not video_id:
             log.error("YouTube upload completed but returned no video ID.")

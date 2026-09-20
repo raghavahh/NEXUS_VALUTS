@@ -7,6 +7,8 @@ Aborts cleanly if all configured providers fail.
 
 import re
 import json
+import time
+import socket
 import urllib.request
 import urllib.error
 from typing import Optional
@@ -34,21 +36,23 @@ def extract_json(raw: str) -> str:
         except Exception:
             pass
 
-    # 2. Use JSONDecoder.raw_decode from first { or [ to avoid Extra Data errors
-    best_json = ""
+    # 2. Use JSONDecoder.raw_decode scanning for valid JSON objects or arrays
     for start_char in ("{", "["):
-        idx = clean.find(start_char)
-        if idx != -1:
+        pos = 0
+        while pos < len(clean):
+            idx = clean.find(start_char, pos)
+            if idx == -1:
+                break
             try:
                 decoder = json.JSONDecoder()
                 _, end_idx = decoder.raw_decode(clean[idx:])
-                best_json = clean[idx:idx + end_idx]
-                break
+                candidate = clean[idx:idx + end_idx].strip()
+                if candidate:
+                    json.loads(candidate)
+                    return candidate
             except Exception:
                 pass
-
-    if best_json:
-        return best_json
+            pos = idx + 1
 
     # 3. Fallback to outer braces
     first_brace = clean.find("{")
@@ -80,10 +84,14 @@ def extract_json(raw: str) -> str:
 def call_openrouter(prompt: str, system_prompt: str = "", task_type: str = "general") -> Optional[str]:
     """OpenRouter Cloud API caller using configuration from .env"""
     api_key = config.ai.openrouter_api_key
-    model = config.ai.openrouter_model
     base_url = config.ai.openrouter_api_url.rstrip("/")
     if not api_key:
         return None
+
+    models = [config.ai.openrouter_model]
+    for fb in ("liquid/lfm-2.5-2.6b:free", "nvidia/nemotron-3-super-120b-a12b:free"):
+        if fb not in models:
+            models.append(fb)
 
     # Set temperature and top_p based on task type
     if task_type in ("hooks", "script", "growth"):
@@ -94,22 +102,21 @@ def call_openrouter(prompt: str, system_prompt: str = "", task_type: str = "gene
         top_p = 0.95
     else:
         temperature = 0.7
-        top_p = 0.9  # default for other task types
+        top_p = 0.9
 
-    url = f"{base_url}/chat/completions"
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": system_prompt or "Documentary intelligence system."},
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": temperature,
-        "top_p": top_p,
-        "max_tokens": 3000
-    }
+    for model in models:
+        url = f"{base_url}/chat/completions"
+        payload = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt or "Documentary intelligence system."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": temperature,
+            "top_p": top_p,
+            "max_tokens": 3000
+        }
 
-    max_attempts = 2
-    for attempt in range(max_attempts):
         try:
             req = urllib.request.Request(
                 url,
@@ -129,27 +136,14 @@ def call_openrouter(prompt: str, system_prompt: str = "", task_type: str = "gene
                     return text
         except urllib.error.HTTPError as e:
             log.warning(f"OpenRouter ({model}) HTTP {e.code}: {e.reason}")
-            if e.code == 429 and attempt < max_attempts - 1:
-                import time
-                # Honor Retry-After header if present
-                retry_after = e.headers.get("Retry-After")
-                if retry_after:
-                    try:
-                        wait_time = int(retry_after)
-                    except ValueError:
-                        wait_time = 5.0  # fallback
-                    wait_time = min(wait_time, 60)  # cool-down cap
-                else:
-                    wait_time = 5.0
-                # bounded cool-down: we will retry once (handled by loop)
-                time.sleep(wait_time)
-            else:
-                # If not 429 or last attempt, we will fail after loop
-                pass
+            if e.code in (401, 403):
+                return None
+            continue
         except Exception as e:
             log.warning(f"OpenRouter ({model}) error: {e}")
-            break
+            continue
     return None
+
 def call_groq(prompt: str, system_prompt: str = "", task_type: str = "general") -> Optional[str]:
     """Groq Cloud API caller using configuration from .env"""
     api_key = config.ai.groq_api_key
@@ -167,22 +161,26 @@ def call_groq(prompt: str, system_prompt: str = "", task_type: str = "general") 
         top_p = 0.95
     else:
         temperature = 0.7
-        top_p = 0.9  # default for other task_types
+        top_p = 0.9
 
-    url = f"{base_url}/chat/completions"
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": system_prompt or "Documentary intelligence system."},
-            {"role": "user", "content": prompt}
-        ],
-        "temperature": temperature,
-        "top_p": top_p,
-        "max_tokens": 6000
-    }
+    models_to_try = [model]
+    for alt in ("qwen/qwen3.8-27b", "openai/gpt-oss-120b"):
+        if alt not in models_to_try:
+            models_to_try.append(alt)
 
-    max_attempts = 2
-    for attempt in range(max_attempts):
+    for current_model in models_to_try:
+        url = f"{base_url}/chat/completions"
+        payload = {
+            "model": current_model,
+            "messages": [
+                {"role": "system", "content": system_prompt or "Documentary intelligence system."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": temperature,
+            "top_p": top_p,
+            "max_tokens": 6000
+        }
+
         try:
             req = urllib.request.Request(
                 url,
@@ -190,35 +188,25 @@ def call_groq(prompt: str, system_prompt: str = "", task_type: str = "general") 
                 headers={
                     "Content-Type": "application/json",
                     "Authorization": f"Bearer {api_key}",
-                    "User-Agent": "NexusVaultsEngine/2.0"
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
                 }
             )
             with urllib.request.urlopen(req, timeout=config.ai.request_timeout) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
                 if text:
-                    log.info(f"Generated via Groq ({model})")
+                    log.info(f"Generated via Groq ({current_model})")
                     return text
         except urllib.error.HTTPError as e:
-            log.warning(f"Groq ({model}) HTTP {e.code}: {e.reason}")
-            if e.code == 429 and attempt < max_attempts - 1:
-                import time
-                # Honor Retry-After header if present
-                retry_after = e.headers.get("Retry-After")
-                if retry_after:
-                    try:
-                        wait_time = int(retry_after)
-                    except ValueError:
-                        wait_time = 5.0  # fallback
-                else:
-                    wait_time = 5.0
-                time.sleep(wait_time)
-            else:
-                pass
+            log.warning(f"Groq ({current_model}) HTTP {e.code}: {e.reason}")
+            if e.code in (401, 403):
+                return None
+            continue
         except Exception as e:
-            log.warning(f"Groq ({model}) error: {e}")
-            break
+            log.warning(f"Groq ({current_model}) error: {e}")
+            continue
     return None
+
 def call_nvidia(prompt: str, system_prompt: str = "", task_type: str = "general") -> Optional[str]:
     """NVIDIA NIM Cloud API caller using configuration from .env"""
     api_key = config.ai.nvidia_api_key
@@ -236,7 +224,7 @@ def call_nvidia(prompt: str, system_prompt: str = "", task_type: str = "general"
         top_p = 0.95
     else:
         temperature = 0.6
-        top_p = 0.9  # default for other task types (keeping original temperature 0.6 for general?)
+        top_p = 0.9
 
     url = f"{base_url}/chat/completions"
     payload = {
@@ -269,31 +257,43 @@ def call_nvidia(prompt: str, system_prompt: str = "", task_type: str = "general"
                     return text
         except urllib.error.HTTPError as e:
             log.warning(f"NVIDIA NIM ({model}) HTTP {e.code}: {e.reason}")
-            if e.code == 429 and attempt < max_attempts - 1:
+            if e.code in (401, 403, 404):
+                break
+            elif e.code == 429 and attempt < max_attempts - 1:
                 import time
-                # Honor Retry-After header if present
                 retry_after = e.headers.get("Retry-After")
                 if retry_after:
                     try:
                         wait_time = int(retry_after)
                     except ValueError:
-                        wait_time = 5.0  # fallback
+                        wait_time = 5.0
                 else:
                     wait_time = 5.0
                 time.sleep(wait_time)
             else:
-                pass
+                break
         except Exception as e:
             log.warning(f"NVIDIA NIM ({model}) error: {e}")
             break
     return None
+
+_LAST_GEMINI_CALL = 0.0
+
 def call_gemini(prompt: str, system_prompt: str = "", task_type: str = "general") -> Optional[str]:
     """Google Gemini Cloud API caller using configuration from .env"""
+    global _LAST_GEMINI_CALL
     api_key = config.ai.gemini_api_key
     model = config.ai.gemini_model
     base_url = config.ai.gemini_api_url.rstrip("/")
     if not api_key:
         return None
+
+    # Defensive 2.0s call pacing to adhere strictly to Google AI Studio free-tier RPM limits
+    now = time.time()
+    elapsed = now - _LAST_GEMINI_CALL
+    if elapsed < 2.0:
+        time.sleep(2.0 - elapsed)
+    _LAST_GEMINI_CALL = time.time()
 
     # Set temperature and top_p based on task type
     if task_type in ("hooks", "script", "growth"):
@@ -307,53 +307,41 @@ def call_gemini(prompt: str, system_prompt: str = "", task_type: str = "general"
         top_p = 0.9  # default for other task_types
 
     models_to_try = [model]
-    for alt in ("gemini-3.5-flash", "gemini-3.8-flash", "gemini-3-flash-preview"):
+    for alt in ("gemini-3.6-flash", "gemini-3.8-flash"):
         if alt not in models_to_try:
             models_to_try.append(alt)
 
-    max_attempts = 2
-    for attempt in range(max_attempts):
-        for current_model in models_to_try:
-            url = f"{base_url}/models/{current_model}:generateContent?key={api_key}"
-            payload = {
-                "contents": [{"parts": [{"text": f"{system_prompt}\n\n{prompt}"}]}],
-                "generationConfig": {"temperature": temperature, "top_p": top_p, "maxOutputTokens": 4096}
-            }
-            try:
-                req = urllib.request.Request(
-                    url,
-                    data=json.dumps(payload).encode("utf-8"),
-                    headers={"Content-Type": "application/json"}
-                )
-                with urllib.request.urlopen(req, timeout=config.ai.request_timeout) as resp:
-                    data = json.loads(resp.read().decode("utf-8"))
-                    candidates = data.get("candidates", [])
-                    if candidates:
-                        text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                        if text:
-                            log.info(f"Generated via Gemini ({current_model})")
-                            return text
-            except urllib.error.HTTPError as e:
-                log.warning(f"Gemini ({current_model}) HTTP {e.code}: {e.reason}")
-                if e.code == 429 and attempt < max_attempts - 1:
-                    import time
-                    time.sleep(1.5)  # simple fixed wait for Gemini; could honor Retry-After but not required
-                # If not 429 or last attempt, we will break after the inner loop? We'll break to outer loop to retry with next model? Actually we want to retry the same model once.
-                # We'll break the inner loop and let the outer loop handle retry? We'll just continue to next attempt (which will retry the same model list again).
-                # We'll set a flag to break the inner loop and go to next attempt.
-                break  # break inner loop to go to next attempt
-            except Exception as e:
-                log.warning(f"Gemini ({current_model}) error: {e}")
-                break
-        else:
-            # If inner loop didn't break, we succeeded and returned already
+    for current_model in models_to_try:
+        url = f"{base_url}/models/{current_model}:generateContent?key={api_key}"
+        payload = {
+            "contents": [{"parts": [{"text": f"{system_prompt}\n\n{prompt}"}]}],
+            "generationConfig": {"temperature": temperature, "top_p": top_p, "maxOutputTokens": 4096}
+        }
+        try:
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"}
+            )
+            with urllib.request.urlopen(req, timeout=config.ai.request_timeout) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                candidates = data.get("candidates", [])
+                if candidates:
+                    text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                    if text:
+                        log.info(f"Generated via Gemini ({current_model})")
+                        return text
+        except urllib.error.HTTPError as e:
+            log.warning(f"Gemini ({current_model}) HTTP {e.code}: {e.reason}")
+            if e.code in (401, 403):
+                return None
+            elif e.code == 429:
+                time.sleep(3.0)
             continue
-        # If inner loop broke due to 429 and we have another attempt, we will retry the same model list
-        # If we are out of attempts, we will fall through to return None
-        if attempt < max_attempts - 1:
+        except Exception as e:
+            log.warning(f"Gemini ({current_model}) error: {e}")
             continue
-        else:
-            break
+
     return None
 PROVIDER_DISPATCH = {
     "openrouter": call_openrouter,
@@ -365,9 +353,9 @@ def route_task(prompt: str, system_prompt: str = "", system_instruction: str = "
     """
     100% Cloud Task Router:
     Routes intelligently according to Section 4:
-    - Primary generation (story, script, research, visual_intent): Gemini -> NVIDIA -> Groq -> OpenRouter
-    - Critic / reasoning / quality pass (scoring, critic, hook): NVIDIA -> Gemini -> Groq -> OpenRouter
-    - Fast formatting: Groq -> Gemini -> NVIDIA -> OpenRouter
+    - Primary generation (story, script, research, visual_intent): NVIDIA -> Groq -> Gemini -> OpenRouter
+    - Critic / reasoning / quality pass (scoring, critic, hook): NVIDIA -> Groq -> Gemini -> OpenRouter
+    - Fast formatting: Groq -> NVIDIA -> Gemini -> OpenRouter
     All orderings are dynamically aligned with the user-configured AI_PROVIDER_CHAIN in .env.
     Aborts cleanly if all configured providers fail.
     """
@@ -384,11 +372,11 @@ def route_task(prompt: str, system_prompt: str = "", system_instruction: str = "
     # Determine intelligent role-based provider ordering
     tt = (task_type or "general").lower()
     if tt in ("critic", "scoring", "quality_pass", "critique", "hook"):
-        role_pref = ["gemini", "groq", "nvidia", "openrouter"]
+        role_pref = ["nvidia", "groq", "gemini", "openrouter"]
     elif tt in ("generation", "story", "script", "research", "visual_intent", "storyboard"):
-        role_pref = ["gemini", "groq", "nvidia", "openrouter"]
+        role_pref = ["nvidia", "groq", "gemini", "openrouter"]
     elif tt in ("fast", "formatting", "seo"):
-        role_pref = ["groq", "gemini", "nvidia", "openrouter"]
+        role_pref = ["groq", "nvidia", "gemini", "openrouter"]
     else:
         role_pref = configured_chain
 
@@ -402,19 +390,12 @@ def route_task(prompt: str, system_prompt: str = "", system_instruction: str = "
         caller = PROVIDER_DISPATCH.get(provider_name)
         if not caller:
             continue
-        for attempt in range(1, max_retries + 1):
-            try:
-                res = caller(prompt, effective_system, task_type=tt)
-                if res:
-                    return res
-                if attempt < max_retries:
-                    import time
-                    time.sleep(1.5 * attempt)
-            except Exception as e:
-                log.warning(f"Provider {provider_name} attempt {attempt} failed: {e}")
-                if attempt < max_retries:
-                    import time
-                    time.sleep(1.5 * attempt)
+        try:
+            res = caller(prompt, effective_system, task_type=tt)
+            if res:
+                return res
+        except Exception as e:
+            log.warning(f"Provider {provider_name} failed: {e}")
 
     raise RuntimeError(
         f"All configured cloud AI providers failed ({', '.join(ordered_chain)}). "

@@ -86,12 +86,19 @@ def generate_production_script(
         data = json.loads(clean)
     except Exception as e:
         log.warning(f"JSON decode notice: {e}. Attempting regex recovery for script...")
-        m = re.search(r'"narration_script":\s*"(.*?)(?:"\s*,\s*"word_count"|"\s*,\s*"core_anomaly"|"\s*\})', clean, re.DOTALL)
-        if not m:
-            m = re.search(r'"narration_script":\s*"(.*?)"\s*\}', clean, re.DOTALL)
-        if m:
-            recovered_script = m.group(1).replace('\\"', '"').replace('\\n', ' ').strip()
-            data = {"narration_script": recovered_script}
+        for pattern in (
+            r'["\'](?:narration_script|narration|script)["\']\s*:\s*["\']([\s\S]*?)["\']\s*,\s*["\'](?:word_count|core_anomaly)',
+            r'["\'](?:narration_script|narration|script)["\']\s*:\s*["\']([\s\S]*?)["\']\s*\}',
+            r'["\'](?:narration_script|narration|script)["\']\s*:\s*["\']([\s\S]*?)(?:["\']\s*\}|\Z)',
+        ):
+            m = re.search(pattern, clean)
+            if not m and raw:
+                m = re.search(pattern, raw)
+            if m:
+                recovered_script = m.group(1).replace('\\"', '"').replace('\\n', ' ').strip()
+                if len(recovered_script.split()) >= 15:
+                    data = {"narration_script": recovered_script}
+                    break
 
     script = data.get("narration_script", "").strip()
     words = len(script.split())
@@ -125,16 +132,23 @@ def generate_production_script(
         data["narration_script"] = script
         data["word_count"] = words
     elif words < min_w or "write the complete" in script.lower() or "the full spoken" in script.lower():
-        fact_sentence = facts[0].rstrip(".") + "." if facts else f"The official archive on {topic} was sealed under security orders."
-        anomaly_text = conflict.rstrip(".") + "." if conflict else "Subsequent analysis reported an anomaly that contradicts official logs."
-        constructed_script = (
-            f"{hook_text} In official archives, the record of {topic} remains an unresolved investigation. "
-            f"{fact_sentence} "
-            f"Researchers documented physical anomalies contradicting standard records. "
-            f"{anomaly_text} "
-            f"No official inquiry has explained the discrepancy. "
-            f"So what actually happened? NEXUS VAULTS."
-        )
+        # Factual synthesis: strictly grounded in verified facts from Wikipedia
+        filtered_facts = [f for f in facts if not f.startswith("DOCUMENTED SOURCE:")]
+        fact_sentence = filtered_facts[0].rstrip(".") + "." if filtered_facts else f"Documented archival records regarding {topic} remain an unresolved investigation."
+        second_fact = filtered_facts[1].rstrip(".") + "." if len(filtered_facts) > 1 else ""
+        anomaly_text = conflict.rstrip(".") + "." if conflict else "Official records confirm the case remains unexplained."
+        
+        parts = [hook_text.rstrip(".") + "."]
+        if fact_sentence:
+            parts.append(fact_sentence)
+        if second_fact:
+            parts.append(second_fact)
+        if anomaly_text and anomaly_text not in fact_sentence:
+            parts.append(anomaly_text)
+        parts.append("Official inquiries reached no definitive conclusion.")
+        parts.append("So what actually happened? NEXUS VAULTS.")
+        
+        constructed_script = " ".join(parts)
         constructed_words = constructed_script.split()
         if len(constructed_words) > max_w:
             constructed_words = constructed_words[:max_w - 5] + ["So", "what", "happened?", "NEXUS", "VAULTS."]

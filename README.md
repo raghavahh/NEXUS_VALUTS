@@ -1,7 +1,7 @@
 # NEXUS VAULTS 2.0 — Autonomous Documentary Shorts Production Engine
 
 > **Channel:** @NEXUS_VAULTS  
-> **PRD Conformance:** Revision 3 (Full Compliance)  
+> **PRD Conformance:** Authoritative PRD.md (Full Compliance)  
 > **Runtime Environment:** Python 3.11+, FFmpeg with `libx264`, SQLite 3.40+  
 
 ---
@@ -81,7 +81,7 @@ C:\YT-SHORTS\
 ├── tests/             # Golden regression suite, novelty tests, hardcoding audit, preflight
 ├── OUTPUT/            # Rendered master MP4s, contact sheets, and temporary scene cache
 ├── .nexus_state/      # Authoritative database state backup
-├── PRD_REVISION_3.md  # Comprehensive Product Requirements Document Revision 3
+├── PRD.md             # Authoritative Product Requirements Document
 ├── main.py            # Primary production orchestrator
 └── .env.example       # Full configuration template with zero exposed secrets
 ```

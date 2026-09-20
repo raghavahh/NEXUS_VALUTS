@@ -71,25 +71,25 @@ class AppConfig:
 @dataclass(frozen=True)
 class AIConfig:
     provider_chain: List[str] = field(default_factory=lambda: [
-        p.strip() for p in os.getenv("AI_PROVIDER_CHAIN", "openrouter,groq,nvidia,gemini").split(",") if p.strip()
+        p.strip() for p in os.getenv("AI_PROVIDER_CHAIN", "nvidia,groq,gemini,openrouter").split(",") if p.strip()
     ])
-    request_timeout: int = int(os.getenv("AI_REQUEST_TIMEOUT", "60"))
-    max_retries: int = int(os.getenv("AI_MAX_RETRIES", "2"))
+    request_timeout: int = int(os.getenv("AI_REQUEST_TIMEOUT", "30"))
+    max_retries: int = int(os.getenv("AI_MAX_RETRIES", "1"))
 
     gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
-    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
     gemini_api_url: str = os.getenv("GEMINI_API_URL", "https://generativelanguage.googleapis.com/v1beta")
 
     nvidia_api_key: str = os.getenv("NVIDIA_API_KEY", "")
-    nvidia_model: str = os.getenv("NVIDIA_MODEL", "meta/llama-3.3-70b-instruct")
+    nvidia_model: str = os.getenv("NVIDIA_MODEL", "nvidia/nemotron-3-super-120b-a12b")
     nvidia_api_url: str = os.getenv("NVIDIA_API_URL", "https://integrate.api.nvidia.com/v1")
 
     groq_api_key: str = os.getenv("GROQ_API_KEY", "")
-    groq_model: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    groq_model: str = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
     groq_api_url: str = os.getenv("GROQ_API_URL", "https://api.groq.com/openai/v1")
 
     openrouter_api_key: str = os.getenv("OPENROUTER_API_KEY", "")
-    openrouter_model: str = os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3.5-lightning:free")
+    openrouter_model: str = os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3-super-120b-a12b:free")
     openrouter_api_url: str = os.getenv("OPENROUTER_API_URL", "https://openrouter.ai/api/v1")
 
 @dataclass(frozen=True)
@@ -200,7 +200,7 @@ class QCConfig:
     require_unique_assets: bool = _parse_bool(os.getenv("QC_REQUIRE_UNIQUE_ASSETS", "true"), True)
     require_frame_verification: bool = _parse_bool(os.getenv("QC_REQUIRE_FRAME_VERIFICATION", "true"), True)
     frame_sample_offset: float = float(os.getenv("QC_FRAME_SAMPLE_OFFSET", "0.5"))
-    frame_match_threshold: float = float(os.getenv("QC_FRAME_MATCH_THRESHOLD", "0.70"))
+    frame_match_threshold: float = float(os.getenv("QC_FRAME_MATCH_THRESHOLD", "0.40"))
     sample_points_per_scene: int = int(os.getenv("QC_SAMPLE_POINTS_PER_SCENE", "3"))
     duration_tolerance: float = float(os.getenv("QC_DURATION_TOLERANCE", "0.5"))
 
@@ -220,7 +220,7 @@ class StorageConfig:
 
 @dataclass(frozen=True)
 class ScheduleConfig:
-    timezone: str = os.getenv("SCHEDULE_TIMEZONE", "America/New_York")
+    timezone: str = os.getenv("SCHEDULE_TIMEZONE") or os.getenv("SCHEDULE_TZ", "America/New_York")
     upload_hour: int = int(os.getenv("SCHEDULE_UPLOAD_HOUR", "19"))
     upload_minute: int = int(os.getenv("SCHEDULE_UPLOAD_MINUTE", "0"))
     ready_buffer_minutes: int = int(os.getenv("SCHEDULE_READY_BUFFER_MINUTES", "60"))

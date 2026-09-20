@@ -150,7 +150,7 @@ def process_feedback_loop():
         log.info(
             f"[WEIGHT UPDATE] '{weight_key}': delta {avg_delta:+.4f} "
             f"(based on {len(deltas)} observations, {total_samples_after} total samples, "
-            f"window: {window_days}d). Scores: {[s['score'] for s in score_log if s.get('hook') == weight_key.split(':')[-1] or s.get('cluster') == weight_key.split(':')[-1]]}"
+            f"window: {window_days}d). Scores: {[s['score'] for s in score_log if (s.get('hook') or s.get('hook_type')) == weight_key.split(':')[-1] or s.get('cluster') == weight_key.split(':')[-1]]}"
         )
 
     log.info(f"Decision engine weight adjustments completed. {len(pending_updates)} keys evaluated.")

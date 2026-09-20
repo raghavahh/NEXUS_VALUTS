@@ -53,10 +53,10 @@ def mix_and_master_audio(voice_path: Path, ambient_path: Path, output_mixed_path
     # 2. Ambient stays at its configured level; sidechain-compressed by voice
     # 3. Mastering stage: loudnorm for EBU R128 loudness measurement & normalization
     filter_chain = (
-        f"[0:a]volume={voice_vol}dB[v];"
+        f"[0:a]volume={voice_vol}dB,asplit=2[v1][v2];"
         f"[1:a]volume=1.0[bg];"
-        f"[bg][v]sidechaincompress=threshold=0.03:ratio={duck_ratio:.1f}:attack=50:release=400[bgd];"
-        f"[v][bgd]amix=inputs=2:duration=first:dropout_transition=2,"
+        f"[bg][v1]sidechaincompress=threshold=0.03:ratio={duck_ratio:.1f}:attack=50:release=400[bgd];"
+        f"[v2][bgd]amix=inputs=2:duration=first:dropout_transition=2,"
         f"loudnorm=I={i_target}:TP={tp_target}:LRA={lra_target}[a]"
     )
 

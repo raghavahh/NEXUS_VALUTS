@@ -65,7 +65,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 raw_word = w_info["word"].upper()
                 if j == target_idx:
                     # Gold/Amber highlight for the active word
-                    line_parts.append(f"{{\\c&H002BF7&\\fscx108\\fscy108}}{raw_word}{{\\r}}")
+                    line_parts.append(f"{{\\c&H00B0FF&\\fscx108\\fscy108}}{raw_word}{{\\r}}")
                 else:
                     # White with slight opacity
                     line_parts.append(f"{{\\c&HFFFFFF&}}{raw_word}{{\\r}}")

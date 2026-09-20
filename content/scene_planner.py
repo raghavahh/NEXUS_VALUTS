@@ -53,7 +53,7 @@ Given this spoken script for an investigative documentary:
 Topic: {topic}
 Word Count: {word_count}
 Total Duration: {total_duration} seconds.
-
+{asset_hints}
 Construct a STRICT {target_count}-SCENE VISUAL CONTRACT where every visual satisfies a CLAIM-LOCAL VISUAL INTENT and identifies an EXACT CLAIM-LOCAL PRIMARY VISUAL SUBJECT.
 
 CRITICAL ANTI-DRIFT RULES (NON-NEGOTIABLE):
@@ -135,6 +135,7 @@ def build_archival_search_queries(primary_subj: str, vtype: str, topic: str) -> 
     import re
     clean_subj = re.sub(r'\(Detail \d+\)', '', primary_subj).strip()
     clean_subj = re.sub(r'\s+Archival Evidence$', '', clean_subj, flags=re.IGNORECASE).strip()
+    clean_subj = re.sub(r'[\(\)\[\]]', '', clean_subj).strip()
     queries = []
     if clean_subj.lower() != topic.lower():
         queries.append(f"{topic} {clean_subj}")
@@ -403,8 +404,17 @@ def generate_storyboard(script: str, topic: str, total_duration: float) -> List[
     max_count = config.scene.max_count
     min_dur = config.scene.min_duration
     max_dur = config.scene.max_duration
-    words = script.split()
+    asset_hints = ""
+    try:
+        from media.images import fetch_wikipedia_article_images
+        imgs = fetch_wikipedia_article_images(topic)
+        if imgs:
+            clean_titles = [re.sub(r'^(?:File:)?(.*?)(?:\.[a-zA-Z0-9]+)?$', r'\1', i.get("title", "")) for i in imgs[:8]]
+            asset_hints = "VERIFIED ARCHIVAL EVIDENCE AVAILABLE IN RECORD:\n- " + "\n- ".join(clean_titles) + "\nPrioritize aligning scenes to feature these authentic archival assets wherever relevant.\n"
+    except Exception:
+        pass
 
+    words = script.split()
     prompt = STORYBOARD_PROMPT.format(
         script=script,
         topic=topic,
@@ -414,7 +424,8 @@ def generate_storyboard(script: str, topic: str, total_duration: float) -> List[
         target_count=target_count,
         max_count=max_count,
         min_duration=min_dur,
-        max_duration=max_dur
+        max_duration=max_dur,
+        asset_hints=asset_hints
     )
 
     try:
@@ -428,6 +439,7 @@ def generate_storyboard(script: str, topic: str, total_duration: float) -> List[
             drift_count = sum(1 for sc in scenes if sc.get("primary_visual_subject", "").lower() == topic_clean)
             if drift_count <= 2:
                 for idx, sc in enumerate(scenes):
+                    vtype = sc.get("visual_type", "ARCHIVAL_PHOTO")
                     if not sc.get("primary_visual_subject") or sc["primary_visual_subject"].lower() == topic_clean:
                         p_subj, supp, vtype, purp = _extract_claim_subject(sc.get("narration", sc.get("claim", topic)), topic)
                         sc["primary_visual_subject"] = p_subj

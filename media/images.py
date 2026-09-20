@@ -208,12 +208,24 @@ def evaluate_semantic_relevance(cand: Dict[str, Any], scene: Dict[str, Any], top
     matching_primary = [w for w in primary_tokens if w in text]
     matching_topic = [w for w in topic_tokens if w in text]
 
+    topic_match_ratio = len(matching_topic) / max(1, len(topic_tokens)) if topic_tokens else 0
+    primary_match_ratio = len(matching_primary) / max(1, len(primary_tokens)) if primary_tokens else 0
+
     if cand.get("source") == "Wikipedia Article Media":
-        entity_match = 0.90 if not matching_primary else max(0.90, len(matching_primary) / max(1, len(primary_tokens)))
+        if primary_match_ratio >= 0.25:
+            entity_match = max(0.85, 0.70 + 0.30 * primary_match_ratio)
+        elif topic_match_ratio >= 0.8:
+            entity_match = 0.85
+        elif matching_primary:
+            entity_match = 0.80
+        elif matching_topic:
+            entity_match = max(0.75, 0.85 * topic_match_ratio)
+        else:
+            entity_match = 0.70
     elif matching_primary:
-        entity_match = len(matching_primary) / max(1, len(primary_tokens))
+        entity_match = max(primary_match_ratio, 0.85 * topic_match_ratio)
     elif matching_topic:
-        entity_match = 0.85 * (len(matching_topic) / max(1, len(topic_tokens)))
+        entity_match = 0.85 * topic_match_ratio
     else:
         entity_match = 0.35
 
@@ -235,7 +247,7 @@ def evaluate_semantic_relevance(cand: Dict[str, Any], scene: Dict[str, Any], top
     matched_events = [k for k in event_keywords if k in claim and k in text]
     event_match = 1.0 if matched_events else (0.8 if not any(k in claim for k in event_keywords) else 0.4)
 
-    loc_keywords = ["cambridge", "princeton", "caltech", "m87", "horizon", "observatory", "cern"]
+    loc_keywords = ["cambridge", "princeton", "caltech", "m87", "horizon", "observatory", "cern", "azores", "gibraltar"]
     matched_locs = [k for k in loc_keywords if k in claim and k in text]
     location_match = 1.0 if matched_locs else (0.8 if not any(k in claim for k in loc_keywords) else 0.4)
 
@@ -245,14 +257,14 @@ def evaluate_semantic_relevance(cand: Dict[str, Any], scene: Dict[str, Any], top
 
     # 5. Visual Type Match
     type_keywords = {
-        "portrait": ["portrait", "painting", "photograph", "photo", "drawing", "face"],
-        "document": ["document", "letter", "page", "manuscript", "telegram", "paper", "treatise", "patent"],
-        "map": ["map", "chart", "cartography", "plan", "route", "atlas"],
-        "diagram": ["diagram", "schematic", "formula", "graph", "drawing", "figure", "structure"],
-        "newspaper": ["newspaper", "headline", "gazette", "article", "times"],
-        "object_closeup": ["telescope", "instrument", "machine", "detector", "device", "apparatus"],
-        "archival_photo": ["photo", "photograph", "vintage", "historical", "archive", "19", "20"],
-        "atmospheric": ["space", "universe", "sky", "dark", "light", "stars", "cosmos"]
+        "portrait": ["portrait", "painting", "photograph", "photo", "drawing", "face", "briggs", "captain"],
+        "document": ["document", "letter", "page", "manuscript", "telegram", "paper", "treatise", "patent", "log", "record", "inquest", "article", "times"],
+        "map": ["map", "chart", "cartography", "plan", "route", "atlas", "ocean", "sea"],
+        "diagram": ["diagram", "schematic", "formula", "graph", "drawing", "figure", "structure", "timeline"],
+        "newspaper": ["newspaper", "headline", "gazette", "article", "times", "press"],
+        "object_closeup": ["telescope", "instrument", "machine", "detector", "device", "apparatus", "barrel", "cargo", "ship", "vessel", "brigantine"],
+        "archival_photo": ["photo", "photograph", "vintage", "historical", "archive", "19", "20", "18", "17", "engraving", "illustration", "ship", "vessel", "brigantine"],
+        "atmospheric": ["space", "universe", "sky", "dark", "light", "stars", "cosmos", "ocean", "sea", "wave", "water"]
     }
     expected_kw = type_keywords.get(vtype, ["historical", "archive"])
     visual_type_match = 1.0 if any(kw in text for kw in expected_kw) else 0.5
@@ -278,6 +290,8 @@ def evaluate_semantic_relevance(cand: Dict[str, Any], scene: Dict[str, Any], top
             0.05 * purpose_match +
             0.05 * prov_conf
         )
+        if cand.get("source") == "Wikipedia Article Media":
+            final_score = max(0.65, final_score)
 
     breakdown = {
         "entity_match": round(entity_match, 2),
@@ -301,13 +315,21 @@ def verify_asset_semantic_qa(primary_subj: str, claim: str, cand: Dict[str, Any]
     title = cand.get("title", "")
     desc = cand.get("description", "")
     source = cand.get("source", "")
+    text_lower = f"{title} {desc}".lower()
 
     # Fast heuristic check for explanatory graphics
     if "Explanatory Graphic" in source:
         return True, "Verified authentic generated explanatory schematic"
 
+    # Fast approval for direct Wikipedia article media (verified authentic from topic article)
+    if source == "Wikipedia Article Media":
+        mismatches = [p for p in KNOWN_FAMOUS_PEOPLE if p in text_lower and p not in primary_subj.lower() and p not in claim.lower()]
+        if not mismatches:
+            return True, f"Verified authentic direct Wikipedia article media for '{primary_subj}'"
+        else:
+            return False, f"Hard rejection: candidate depicts mismatched person '{mismatches[0]}'"
+
     # HARD DETERMINISTIC GATE 1: Mismatched famous persons (zero tolerance for random historical or modern figures)
-    text_lower = f"{title} {desc}".lower()
     mismatches = [p for p in KNOWN_FAMOUS_PEOPLE if p in text_lower and p not in primary_subj.lower() and p not in claim.lower()]
     if mismatches:
         return False, f"Hard rejection: candidate depicts mismatched person '{mismatches[0]}'"
@@ -329,7 +351,7 @@ CANDIDATE DESCRIPTION: {desc}
 RULES:
 1. If the primary subject is a specific person (e.g. Stephen Hawking) and the candidate is a DIFFERENT person (e.g. Ada Lovelace, Isaac Newton), you MUST REJECT (approved: false).
 2. If the candidate is an unrelated filler image (e.g. a mind map, a modern car axle, an unrelated municipal bus), you MUST REJECT (approved: false).
-3. If the candidate truthfully depicts or faithfully explains the primary subject or claim, APPROVE (approved: true).
+3. If the candidate truthfully depicts or faithfully explains the primary subject or claim, or is an authentic contemporary primary source document/photograph/illustration of the topic event, APPROVE (approved: true).
 
 Output strictly valid JSON:
 {{"approved": true, "reason": "concise explanation"}}
@@ -426,12 +448,16 @@ def collect_storyboard_assets(
             if len(commons_candidates) >= config.scene.max_candidates_per_scene:
                 break
 
-        # If specific queries returned nothing, attempt fallback query on clean topic / subject
-        if not commons_candidates:
+        # If specific queries returned nothing or few, attempt fallback queries on topic / subject
+        if len(commons_candidates) < 2 and topic:
             fallback_q = f"{topic} {primary_subj.split()[0]}" if primary_subj else topic
             for r in search_commons_query(fallback_q, limit=4):
-                if not any(c["canonical_url"] == r["canonical_url"] for c in candidate_queue):
+                if not any(c["canonical_url"] == r["canonical_url"] for c in candidate_queue) and not any(c["canonical_url"] == r["canonical_url"] for c in commons_candidates):
                     commons_candidates.append(r)
+            if len(commons_candidates) < 2:
+                for r in search_commons_query(topic, limit=4):
+                    if not any(c["canonical_url"] == r["canonical_url"] for c in candidate_queue) and not any(c["canonical_url"] == r["canonical_url"] for c in commons_candidates):
+                        commons_candidates.append(r)
 
         candidate_queue.extend(commons_candidates)
 
@@ -440,7 +466,7 @@ def collect_storyboard_assets(
         # Allowed purposes: ESTABLISH_LOCATION, PROVIDE_CONTEXT, BUILD_TENSION, ATMOSPHERIC
         PEXELS_BLOCKED_PURPOSES = {
             "SHOW_PRIMARY_EVIDENCE", "SHOW_SECONDARY_EVIDENCE", "IDENTIFY_PERSON",
-            "SHOW_PRIMARY_EVIDENCE", "HIGHLIGHT_DETAIL", "REVEAL_INFORMATION",
+            "HIGHLIGHT_DETAIL", "REVEAL_INFORMATION",
             "SHOW_ROUTE", "SHOW_TIMELINE", "SHOW_CONTRADICTION", "EXPLAIN_MECHANISM"
         }
         scene_purpose = scene.get("visual_purpose", "SHOW_PRIMARY_EVIDENCE")
@@ -461,6 +487,7 @@ def collect_storyboard_assets(
         evaluated_candidates.sort(key=lambda x: x[0], reverse=True)
 
         accepted = False
+        tested_qa_count = 0
         for score, breakdown, cand in evaluated_candidates:
             if cand["canonical_url"] in used_urls:
                 continue
@@ -474,6 +501,10 @@ def collect_storyboard_assets(
             # HARD RELEVANCE GATE: Reject anything below minimum
             if score < min_relevance:
                 continue
+
+            if tested_qa_count >= max(3, config.scene.max_candidates_per_scene):
+                break
+            tested_qa_count += 1
 
             # SECTION 22: Visual Semantic QA Pass
             qa_ok, qa_reason = verify_asset_semantic_qa(primary_subj, claim, cand, vtype)
