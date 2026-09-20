@@ -105,29 +105,32 @@ def produce_growth_brain(candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
         log.error("[NOVELTY GATE] All discovered candidates failed the 3-level novelty audit.")
         return None
 
-    # Rank novel candidates
-    ranked = sorted(novel_candidates, key=score_candidate, reverse=True)
-    
-    # Visual budget pre-flight: select highest-scoring candidate that has sufficient
-    # authentic archival evidence in Wikipedia (>= 3 article images) to satisfy PRD Section 6
-    # (>= 4 authentic archival assets, <= 3 generated graphics across 12 scenes).
-    winner = None
-    for cand in ranked:
-        try:
-            from media.images import fetch_wikipedia_article_images
-            imgs = fetch_wikipedia_article_images(cand["title"])
-            if len(imgs) >= 3:
-                winner = cand
-                log.info(f"Selected visually rich winning topic: '{winner['title']}' ({len(imgs)} article images, Cluster: {winner['cluster']})")
-                break
-            else:
-                log.info(f"Skipping candidate '{cand['title']}' due to sparse archival imagery ({len(imgs)} images < 3)")
-        except Exception:
-            pass
+    # 2. Media Preflight Gate: Enforce PRD S6 authentic documentary asset requirements
+    from research.media_preflight import evaluate_media_preflight
 
-    if not winner:
-        winner = ranked[0]
-        log.info(f"Selected winning topic: '{winner['title']}' (Cluster: {winner['cluster']})")
+    eligible_candidates = []
+    for cand in novel_candidates:
+        report = evaluate_media_preflight(cand["title"])
+        cand["media_preflight"] = report
+        if report["status"] in ("ELIGIBLE", "STRONG"):
+            eligible_candidates.append(cand)
+
+    if not eligible_candidates:
+        log.error(
+            "[MEDIA PREFLIGHT: PIPELINE DEFERRED] Zero discovered candidates met the media preflight gate "
+            "(minimum 4 relevant authentic documentary assets). Deferring production cleanly."
+        )
+        return None
+
+    # 3. Rank ONLY eligible candidates (winner MUST be in eligible_candidates)
+    ranked = sorted(eligible_candidates, key=score_candidate, reverse=True)
+    winner = ranked[0]
+    assert winner in eligible_candidates, "CRITICAL: Winner must belong to preflight eligible_candidates!"
+    log.info(
+        f"Selected winning topic: '{winner['title']}' (Cluster: {winner['cluster']} | "
+        f"Preflight: {winner['media_preflight']['status']} | Relevant Assets: {winner['media_preflight']['relevant_count']} | "
+        f"Est. Survivors: {winner['media_preflight']['estimated_survivors']})"
+    )
     
     # Gather YouTube competitor intelligence
     intel = sample_competitor_shorts(winner["title"])

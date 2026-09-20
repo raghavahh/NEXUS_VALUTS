@@ -48,13 +48,10 @@ def _safe_relpath(p) -> str:
         return str(p)
 
 def _mask_secret(val: Optional[str]) -> str:
-    """Safely masks credentials so secrets never appear in logs or diagnostics."""
-    if not val:
-        return "<NOT SET>"
-    val = val.strip()
-    if len(val) <= 8:
-        return "***"
-    return f"{val[:4]}...{val[-4:]}"
+    """Safely reports credential presence as SET or NOT SET without exposing any fragment."""
+    if not val or not str(val).strip():
+        return "NOT SET"
+    return "SET"
 
 def _clean_str(val: Optional[str], default: str = "") -> str:
     if val is None:
@@ -287,11 +284,13 @@ class Config:
             f"APP_ENV:            {self.app.env} (MODE: {self.app.mode})",
             f"SCHEDULE_TZ:        {self.schedule.timezone} [UPLOAD: {self.schedule.upload_hour:02d}:{self.schedule.upload_minute:02d} | READY-BY: -{self.schedule.ready_buffer_minutes}m]",
             f"AI_PROVIDER_CHAIN:  {', '.join(self.ai.provider_chain)}",
-            f"OPENROUTER_MODEL:   {self.ai.openrouter_model} [KEY: {_mask_secret(self.ai.openrouter_api_key)}]",
-            f"GROQ_MODEL:         {self.ai.groq_model} [KEY: {_mask_secret(self.ai.groq_api_key)}]",
-            f"NVIDIA_MODEL:       {self.ai.nvidia_model} [KEY: {_mask_secret(self.ai.nvidia_api_key)}]",
-            f"GEMINI_MODEL:       {self.ai.gemini_model} [KEY: {_mask_secret(self.ai.gemini_api_key)}]",
-            f"YOUTUBE CREDENTIALS: CLIENT_ID: {_mask_secret(self.youtube.client_id)} | REFRESH_TOKEN: {_mask_secret(self.youtube.refresh_token)}",
+            f"OPENROUTER_KEY:     {_mask_secret(self.ai.openrouter_api_key)} [MODEL: {self.ai.openrouter_model}]",
+            f"GROQ_KEY:           {_mask_secret(self.ai.groq_api_key)} [MODEL: {self.ai.groq_model}]",
+            f"NVIDIA_KEY:         {_mask_secret(self.ai.nvidia_api_key)} [MODEL: {self.ai.nvidia_model}]",
+            f"GEMINI_KEY:         {_mask_secret(self.ai.gemini_api_key)} [MODEL: {self.ai.gemini_model}]",
+            f"YT_CLIENT_ID:       {_mask_secret(self.youtube.client_id)}",
+            f"YT_CLIENT_SECRET:   {_mask_secret(self.youtube.client_secret)}",
+            f"YT_REFRESH_TOKEN:   {_mask_secret(self.youtube.refresh_token)}",
             f"PEXELS STATUS:      {'ENABLED' if self.media.pexels_enabled else 'DISABLED (KEY NOT SET)'}",
             f"TARGET DURATION:    {self.story.target_duration}s ({self.story.min_duration}s - {self.story.max_duration}s)",
             f"SCENE TARGET:       {self.scene.target_count} scenes ({self.scene.min_count} - {self.scene.max_count})",

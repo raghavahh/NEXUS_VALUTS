@@ -35,11 +35,12 @@ Generate {count} HIGH-RETENTION DOCUMENTARY HOOKS across the curiosity categorie
 - COUNTDOWN hooks ("Within hours, investigators uncovered...")
 - LOCATION hooks ("At the exact coordinates where...")
 
-STRICT RULES:
+STRICT FACTUAL GROUNDING RULES:
 1. NEVER start with "Did you know", "Imagine if", or clickbait lies.
-2. Ground each hook strictly in the Verified Facts provided above.
-3. NEVER invent dates, memos, classified documents, coordinates, or names not explicitly stated in the Verified Facts.
-4. Keep each hook under 16 words. Punchy and cinematic.
+2. Ground each hook strictly and verbatim in the Verified Facts provided above.
+3. ZERO EMBELLISHMENT: NEVER invent actions or descriptive details not explicitly stated in the Verified Facts (e.g. do NOT invent "crowds gathered to watch", "hand-drawn sketches", "secret dossier", "unexplained battle").
+4. NEVER invent dates, memos, classified documents, coordinates, or names not explicitly stated in the Verified Facts.
+5. Keep each hook under 16 words. Punchy, authentic, and cinematic.
 
 Return raw JSON only (no markdown fences):
 {{
@@ -91,10 +92,21 @@ def generate_and_score_hooks(topic: str, facts: List[str], conflict: str, source
         for m in re.finditer(r'["\']?(?:hook|text|content)["\']?\s*:\s*["\']([^"\']{20,160})["\']', raw, re.IGNORECASE):
             candidates.append({"category": "CONTRADICTION", "hook": m.group(1).strip()})
         if not candidates:
-            for line in raw.splitlines():
+            for line in raw.split("\n"):
                 m_line = re.match(r'^\s*(?:\d+[\.\)]|\-|\*)\s*["\']?([^"\'\n]{25,160})["\']?', line)
                 if m_line:
                     candidates.append({"category": "CONTRADICTION", "hook": m_line.group(1).strip()})
+
+    # Always ensure guaranteed factual baseline candidate directly from verified facts
+    if facts:
+        lead_fact = facts[0].strip().rstrip(".")
+        words_lead = lead_fact.split()
+        if len(words_lead) > 13:
+            lead_fact = " ".join(words_lead[:13])
+        candidates.append({
+            "category": "CONTRADICTION",
+            "hook": f"Documented archival records confirm {lead_fact.lower()}."
+        })
 
     # Guaranteed non-empty fallback hooks grounded in verified facts
     if not candidates:
@@ -110,10 +122,10 @@ def generate_and_score_hooks(topic: str, facts: List[str], conflict: str, source
         if isinstance(c, dict) and "hook" in c:
             c["hook"] = c["hook"].replace('"', "'").strip()
 
-    # Score each hook: Historical weight * brevity bonus
+    # Score each hook: Historical weight * brevity bonus * factual grounding
     scored_hooks = []
     sc_lower = source_context.lower() if source_context else ""
-    suspicious = ["memo", "logbook", "cipher", "blueprint", "declassified", "sealed admiralty", "telegram", "diaries", "diary", "classified memo"]
+    suspicious = ["memo", "logbook", "cipher", "blueprint", "declassified", "sealed admiralty", "telegram", "diaries", "diary", "classified memo", "sketches", "hand-drawn"]
 
     for item in candidates:
         cat = item.get("category", "CONTRADICTION")
@@ -131,9 +143,9 @@ def generate_and_score_hooks(topic: str, facts: List[str], conflict: str, source
 
         score = base_w * mult
 
-        # Factual grounding penalty: if hook invents document/memo types absent from source, heavily down-rank
+        # Factual grounding penalty: if hook invents document/embellishment words absent from source, down-rank heavily
         if sc_lower and any(w in text.lower() and w not in sc_lower for w in suspicious):
-            score *= 0.15
+            score *= 0.05
 
         scored_hooks.append((score, {"category": cat, "text": text}))
 

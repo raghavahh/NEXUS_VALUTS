@@ -40,9 +40,10 @@ class StructuralPreflightTest(unittest.TestCase):
 
     def test_03_secret_masking(self):
         from core.config import _mask_secret
-        self.assertEqual(_mask_secret(""), "<NOT SET>")
-        self.assertEqual(_mask_secret("123456"), "***")
+        self.assertEqual(_mask_secret(""), "NOT SET")
+        self.assertEqual(_mask_secret("123456"), "SET")
         masked = _mask_secret("sk-or-v1-abcdef123456")
+        self.assertEqual(masked, "SET")
         self.assertNotIn("abcdef", masked)
 
     def test_04_db_schema_in_sandbox(self):

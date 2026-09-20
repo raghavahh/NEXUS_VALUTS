@@ -301,14 +301,22 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, force_topic:
 
         # If the hook itself was rejected, switch to an alternative candidate hook from hook_data
         regen_hook = hook_text
-        all_hooks = hook_data.get("all_candidates", [])
         rej_str = claim_audit.get("rejection_reason", "").lower()
         if any(w in rej_str for w in hook_text.lower().split()[:4]):
+            fact_lead = facts[0].strip().rstrip(".") if facts else f"Historical records regarding {topic_name}"
+            fact_words = fact_lead.split()
+            if len(fact_words) > 13:
+                fact_lead = " ".join(fact_words[:13])
+            regen_hook = f"Documented archival records confirm {fact_lead.lower()}."
+            hook_type = "CONTRADICTION"
+            log.info(f"Switched hook for regeneration to strictly grounded fact [{hook_type}]: \"{regen_hook}\"")
+        else:
+            all_hooks = hook_data.get("all_candidates", [])
             for alt in all_hooks:
                 if alt.get("text") and alt["text"] != hook_text:
                     regen_hook = alt["text"]
                     hook_type = alt.get("category", hook_type)
-                    log.info(f"Switched hook for regeneration to candidate [{hook_type}]: \"{regen_hook}\"")
+                    log.info(f"Switched hook for regeneration to alternative candidate [{hook_type}]: \"{regen_hook}\"")
                     break
 
         grounding_facts = list(facts) + [f"DOCUMENTED SOURCE: {source_text[:2000].strip()}"]

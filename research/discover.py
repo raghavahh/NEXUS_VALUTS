@@ -119,8 +119,8 @@ def discover_candidates(target_count: int = None) -> List[Dict[str, Any]]:
             info = fetch_wikipedia_summary(t)
             summary = info.get("summary", "")
             
-            # Filter out non-stories, disambiguations, or overly short stubs
-            if len(summary) > 180 and "refer to:" not in summary.lower():
+            # Filter out non-stories, disambiguations, overly short stubs, and media-barren topics
+            if len(summary) > 180 and "refer to:" not in summary.lower() and info.get("thumbnail"):
                 candidates.append({
                     "cluster": cluster,
                     "title": info["title"],
@@ -131,6 +131,24 @@ def discover_candidates(target_count: int = None) -> List[Dict[str, Any]]:
                     "cluster_weight": get_weight(f"cluster:{cluster}", 1.0)
                 })
                 break
+        else:
+            # Fallback if no thumbnail found in first pass: pick longest summary
+            for t in titles:
+                if is_topic_already_used(t) or any(c["title"] == t for c in candidates):
+                    continue
+                info = fetch_wikipedia_summary(t)
+                summary = info.get("summary", "")
+                if len(summary) > 300 and "refer to:" not in summary.lower():
+                    candidates.append({
+                        "cluster": cluster,
+                        "title": info["title"],
+                        "summary": summary,
+                        "url": info["url"],
+                        "thumbnail": info.get("thumbnail", ""),
+                        "fact_confidence": 0.95,
+                        "cluster_weight": get_weight(f"cluster:{cluster}", 1.0)
+                    })
+                    break
                 
     if not candidates:
         # No hardcoded fallback stories — zero hardcoding rule.
