@@ -49,7 +49,12 @@ def upload_short_to_youtube(
     }).encode("utf-8")
 
     try:
-        req = urllib.request.Request(token_url, data=payload, method="POST")
+        req = urllib.request.Request(
+            token_url,
+            data=payload,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
+            method="POST"
+        )
         with urllib.request.urlopen(req, timeout=15) as resp:
             token_data = json.loads(resp.read().decode("utf-8"))
             access_token = token_data.get("access_token")

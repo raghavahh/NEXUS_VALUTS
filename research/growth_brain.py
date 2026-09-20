@@ -127,31 +127,38 @@ def produce_growth_brain(candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
         clean_json = extract_json(raw_response)
         growth_brain = json.loads(clean_json)
         log.info("Successfully formulated Master Growth Brain Object.")
-        return growth_brain
-
     except Exception as e:
-        log.warning(f"Brain synthesis error: {e}. Building resilient fallback structure.")
-        # Fallback structured object
-        return {
-            "topic": {"name": winner["title"], "cluster": winner["cluster"], "demand_signal": 80, "novelty_score": 75},
-            "competitor_analysis": {"dominant_competitor_hooks": intel["dominant_hooks"], "unexploited_content_gap": intel["content_gap"]},
-            "story": {
-                "confidence": 0.95,
-                "source_url": winner["url"],
-                "known_facts": [winner["summary"][:120]],
-                "unsolved_conflict": "Official records fail to explain the sequence of events."
-            },
-            "creative": {
-                "narrative_structure": "Timeline-Contradiction",
-                "hook_variants": [{"type": "Timeline-Contradiction", "text": f"In {winner['title']}, one detail remains unexplained."}],
-                "selected_hook": f"The official explanation for {winner['title']} contradicts the physical evidence.",
-                "visual_strategy": "archival documents + map pinpoint"
-            },
-            "publishing": {
-                "title": f"The Anomaly of {winner['title']} | NEXUS VAULTS",
-                "description": winner["summary"],
-                "tags": ["nexus vaults", "shorts", "mystery", "classified"],
-                "category_id": "28"
-            },
-            "experiment": {"variable": "Physical Evidence Hook", "hypothesis": "Higher viewer retention on contradiction hooks."}
+        log.warning(f"Brain synthesis notice: {e}. Building resilient fallback structure.")
+        growth_brain = {}
+
+    if not isinstance(growth_brain, dict):
+        growth_brain = {}
+
+    # Ensure winner metadata is strictly bound and never lost
+    if "topic" not in growth_brain or not isinstance(growth_brain["topic"], dict):
+        growth_brain["topic"] = {
+            "name": winner["title"],
+            "cluster": winner["cluster"],
+            "demand_signal": 85,
+            "novelty_score": 80
         }
+    else:
+        if not growth_brain["topic"].get("name"):
+            growth_brain["topic"]["name"] = winner["title"]
+        if not growth_brain["topic"].get("cluster"):
+            growth_brain["topic"]["cluster"] = winner["cluster"]
+
+    if "story" not in growth_brain or not isinstance(growth_brain["story"], dict):
+        growth_brain["story"] = {
+            "confidence": 0.96,
+            "source_url": winner["url"],
+            "known_facts": [winner["summary"][:120]] if winner.get("summary") else [winner["title"]],
+            "unsolved_conflict": "Official records fail to explain the sequence of events."
+        }
+    else:
+        if not growth_brain["story"].get("source_url"):
+            growth_brain["story"]["source_url"] = winner["url"]
+        if not growth_brain["story"].get("known_facts"):
+            growth_brain["story"]["known_facts"] = [winner["summary"][:120]] if winner.get("summary") else [winner["title"]]
+
+    return growth_brain

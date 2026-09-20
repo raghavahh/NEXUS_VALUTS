@@ -200,15 +200,25 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, force_topic:
         if isinstance(growth_brain, list) and growth_brain:
             growth_brain = growth_brain[0]
         if not isinstance(growth_brain, dict):
-            growth_brain = {"topic": {"name": "Historical Mystery", "cluster": "Unexplained Events"}}
+            growth_brain = {}
 
+        primary_cand = candidates[0] if candidates else {"title": "Historical Mystery", "cluster": "Unexplained Events", "url": "https://en.wikipedia.org"}
         topic_data = growth_brain.get("topic", {})
-        topic_name = topic_data.get("name", "Historical Mystery") if isinstance(topic_data, dict) else "Historical Mystery"
-        cluster = topic_data.get("cluster", "Unexplained Events") if isinstance(topic_data, dict) else "Unexplained Events"
+
+        if isinstance(topic_data, dict):
+            topic_name = topic_data.get("name") or topic_data.get("title") or growth_brain.get("title") or primary_cand["title"]
+            cluster = topic_data.get("cluster") or growth_brain.get("cluster") or primary_cand["cluster"]
+        elif isinstance(topic_data, str) and topic_data.strip():
+            topic_name = topic_data.strip()
+            cluster = growth_brain.get("cluster") or primary_cand["cluster"]
+        else:
+            topic_name = growth_brain.get("title") or growth_brain.get("name") or primary_cand["title"]
+            cluster = growth_brain.get("cluster") or primary_cand["cluster"]
+
         story_data = growth_brain.get("story", {}) if isinstance(growth_brain, dict) else {}
         facts = story_data.get("known_facts", [topic_name]) if isinstance(story_data, dict) else [topic_name]
         conflict = story_data.get("unsolved_conflict", "Conflicting official reports.") if isinstance(story_data, dict) else "Conflicting official reports."
-        source_url = story_data.get("source_url", "https://en.wikipedia.org") if isinstance(story_data, dict) else "https://en.wikipedia.org"
+        source_url = (story_data.get("source_url") if isinstance(story_data, dict) else None) or primary_cand.get("url", "https://en.wikipedia.org")
 
     # Step 3b Gate: 3-Level Topic Novelty Verification Gate
     # Audits the selected candidate topic and narrative angle before recording or production

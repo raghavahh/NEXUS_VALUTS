@@ -41,6 +41,7 @@ def _refresh_oauth_token() -> Optional[str]:
         req = urllib.request.Request(
             "https://oauth2.googleapis.com/token",
             data=payload,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
             method="POST"
         )
         with urllib.request.urlopen(req, timeout=12) as resp:
