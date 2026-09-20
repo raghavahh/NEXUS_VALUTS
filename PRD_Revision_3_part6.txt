@@ -1,0 +1,102 @@
+============================================================
+PHASE 14 — ERROR HANDLING
+============================================================
+
+Inspect all external dependency failure paths:
+
+- Wikipedia
+- Wikimedia
+- Pexels
+- AI providers
+- TTS
+- FFmpeg
+- YouTube OAuth
+- YouTube upload
+- Analytics API
+- filesystem
+- database
+- network
+
+For every failure:
+determine whether the pipeline should retry, fallback, or defer.
+
+No fake success.
+
+No swallowing exceptions that create corrupted production state.
+
+============================================================
+PHASE 15 — AUTOMATION
+============================================================
+
+Inspect GitHub Actions and any scheduler/automation infrastructure.
+
+The final system should support:
+
+laptop OFF
+↓
+scheduled automation
+↓
+production run
+↓
+safe completion/defer
+↓
+persist state
+
+Verify:
+- timezone behavior
+- secrets
+- environment variables
+- artifact lifecycle
+- concurrency
+- duplicate concurrent runs
+- retry behavior
+- logs
+- exit codes
+
+Do not assume local Windows execution is enough.
+
+============================================================
+PHASE 16 — IMPLEMENT EVERYTHING MISSING
+============================================================
+
+ONLY AFTER the full audit is complete:
+
+Fix every genuine gap required by the PRD.
+
+Do not redesign working architecture unnecessarily.
+
+Do not rewrite modules just for style.
+
+Do not add speculative features.
+
+Do not weaken any existing invariant.
+
+Do not turn every implementation constant into an environment variable.
+
+Do not change the established credential variable names.
+
+Preserve the current production behavior that already works.
+
+============================================================
+PHASE 17 — CURRENT PRODUCTION STANDARD
+============================================================
+
+The end state should be:
+
+A single production command can safely run the whole pipeline.
+
+No human needs to manually choose:
+- topic
+- images
+- script
+- scenes
+- schedule
+- YouTube settings
+
+The machine decides using the PRD rules.
+
+The machine may DEFER when requirements cannot be satisfied.
+
+DEFER is a valid autonomous outcome.
+
+Publishing a broken or duplicate video is NOT a valid outcome.

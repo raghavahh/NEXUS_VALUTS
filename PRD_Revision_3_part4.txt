@@ -1,0 +1,99 @@
+============================================================
+PHASE 7 — PRODUCTION AUTONOMY
+============================================================
+
+The system must be able to operate without human intervention.
+
+The production loop must:
+
+1. discover a valid new topic
+2. reject duplicates
+3. select the topic
+4. generate hooks
+5. generate narration
+6. verify claims
+7. generate SEO
+8. generate voice
+9. plan claim-local scenes
+10. collect valid assets
+11. reject accidental asset reuse
+12. render
+13. verify actual output
+14. schedule safely
+15. upload privately with future publishAt
+16. persist all required state
+17. clean temporary artifacts
+18. produce an accurate report
+
+Any unsafe condition must result in:
+
+DEFER
+
+not:
+
+fake success
+fallback to duplicate
+partial publish
+immediate public upload
+silent failure
+
+============================================================
+PHASE 8 — AUTONOMOUS LEARNING
+============================================================
+
+Verify that previous videos' analytics are read before selecting the next
+run's strategy.
+
+Own channel:
+YouTube Analytics API v2 only.
+
+Competitors:
+public intelligence only.
+
+No fake metrics.
+
+No double-counting APV when no independent hook signal exists.
+
+Learning must remain:
+- bounded
+- explainable
+- sample guarded
+- observation-window constrained
+
+The current run must never be treated as already learned from.
+
+============================================================
+PHASE 9 — VISUAL INTELLIGENCE
+============================================================
+
+This project is NOT allowed to become:
+
+"download a few images and put zoom effects on them."
+
+Every scene must have:
+- claim-local subject
+- visual purpose
+- relevant asset
+- provenance
+- dedup identity
+- correct asset type
+- correct source classification
+
+No generic filler.
+
+No accidental reuse.
+
+No fake archival evidence.
+
+Pexels only for permitted atmospheric/context use.
+
+Generated graphics only as legitimate last resort.
+
+Generated assets must use the established identity model:
+
+nexus-generated://nexus_graphic_{scene_id}_{claim_hash}
+
+plus real SHA-256 and dHash values.
+
+Inspect the actual compositor and rendering behavior to make sure the code
+really honors the scene manifest rather than making its own asset choices.

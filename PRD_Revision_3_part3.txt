@@ -1,0 +1,56 @@
+============================================================
+PHASE 5 — DATABASE / STATE TRUTH
+============================================================
+
+Inspect the real nexus.db and state system.
+
+Verify:
+
+- database path
+- topic registry
+- video registry
+- content memory
+- provenance
+- analytics
+- dynamic weights
+- file numbering
+- topic statuses
+- YouTube IDs
+- scheduled videos
+- current production history
+- state synchronization
+- duplicate protection
+- historical records
+
+Important historical context:
+
+FILE #002 = D'Alembert's paradox
+FILE #003 = accidental duplicate of D'Alembert's paradox
+FILE #004 = Greisen–Zatsepin–Kuzmin limit
+
+The duplicate bug was already diagnosed and fixed.
+
+Verify that the fix is actually present in the current code and database
+logic.
+
+Do not modify/cancel existing YouTube videos automatically.
+
+============================================================
+PHASE 6 — CURRENT PRODUCTION ARCHIVE
+============================================================
+
+Inspect the current production history.
+
+Verify actual consistency between:
+
+DB
+reports
+state
+output files
+YouTube IDs
+topic records
+content memory
+
+Look specifically for stale-data contamination.
+
+A report for FILE_NNN must never accidentally describe another file.

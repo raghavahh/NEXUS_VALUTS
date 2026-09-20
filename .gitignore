@@ -1,0 +1,36 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Local database & state (persisted via GitHub Actions Artifacts)
+*.db
+.nexus_state/
+
+# Generated production media
+OUTPUT/
+*.mp4
+*.mp3
+*.ass
+*.ts
+
+# Environment & API keys
+.env
+.env.*
+!.env.example
+
+
+scratch/
+_junk_review/
+.agents/
+.nexus_state.backup/
+nexus.db.backup*
+*.backup
+test_output.txt
+extracted_requirements.json
+PRD_Revision_3_*.txt
+modify_llm_router.py
+inspect_db.py
+test_db.py
+test_functions.py
+test_circuit_breaker.py

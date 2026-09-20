@@ -1,0 +1,685 @@
+You are now the lead engineer for the NEXUS VAULTS 2.0 project.
+
+The workspace already opened is:
+
+C:\YT-SHORTS
+
+DO NOT start by changing random files.
+
+FIRST, fully understand the entire repository and the complete system.
+
+============================================================
+MISSION
+============================================================
+
+Turn NEXUS VAULTS into a genuinely autonomous production YouTube
+Shorts documentary system.
+
+You must understand:
+
+1. The complete PRD Revision 3
+2. The entire repository structure
+3. Every production-relevant source file
+4. Database schema and actual database state
+5. Runtime configuration
+6. AI provider routing
+7. Research pipeline
+8. Content generation pipeline
+9. Claim verification
+10. Scene planning
+11. Image/asset harvesting
+12. Asset deduplication
+13. Generated graphics
+14. Voice generation
+15. Captions
+16. Audio mastering
+17. Render/compositor
+18. Visual QC
+19. Scheduling
+20. YouTube OAuth/upload
+21. Analytics synchronization
+22. Decision engine
+23. Persistent memory/state
+24. Cleanup/lifecycle
+25. Production reports
+26. GitHub Actions / automation if present
+27. All existing tests and regression protections
+28. Existing production artifacts and their relationship to the database
+
+The objective is NOT merely to make tests pass.
+
+The objective is:
+
+PRD → CODE → DATABASE → RUNTIME → YOUTUBE
+
+must behave as one coherent autonomous system.
+
+============================================================
+PHASE 1 — REPOSITORY DISCOVERY
+============================================================
+
+Start by recursively inventorying the entire workspace.
+
+Inspect:
+
+- all .py files
+- all .md documentation
+- all config files
+- .env.example
+- workflow files
+- shell/PowerShell scripts
+- requirements/dependency files
+- database files/schema/migrations
+- test files
+- state files
+- manifests
+- output/report files
+- relevant media metadata
+- README/documentation
+- git status/history where useful
+
+Do NOT read or print secret values from .env.
+
+For .env:
+- determine which configuration keys exist
+- determine whether required production configuration exists
+- NEVER print secret values
+
+Ignore only files that are clearly generated dependencies/cache/binaries
+such as node_modules, Python caches, .git internals, etc., unless a file
+inside them is explicitly required to understand runtime behavior.
+
+For production outputs:
+inspect metadata and reports where useful.
+If an image/contact sheet/video can be visually inspected, inspect it.
+
+============================================================
+PHASE 2 — READ THE ENTIRE PRD
+============================================================
+
+Find the current:
+
+NEXUS VAULTS 2.0 PRD Revision 3
+
+Read it completely.
+
+Do NOT assume earlier versions are authoritative.
+
+Revision 3 is the current contract.
+
+Build an internal requirement map covering EVERY normative requirement.
+
+Do not paraphrase away important details.
+
+Capture:
+- hard rules
+- pipeline order
+- configuration rules
+- database rules
+- novelty rules
+- claim verification
+- visual rules
+- dedup rules
+- QC rules
+- scheduling rules
+- upload rules
+- analytics rules
+- learning rules
+- storage rules
+- reporting rules
+- CLI rules
+- production invariants
+- golden regression requirements
+============================================================
+PHASE 3 — COMPLETE SYSTEM MAP
+============================================================
+
+After reading everything, build a concrete internal map:
+
+ENTRYPOINT
+↓
+CONFIG
+↓
+DATABASE / STATE
+↓
+ANALYTICS
+↓
+DISCOVERY
+↓
+GROWTH BRAIN
+↓
+NOVELTY
+↓
+HOOK
+↓
+SCRIPT
+↓
+CLAIM VERIFICATION
+↓
+SEO
+↓
+VOICE
+↓
+SCENE PLANNER
+↓
+ASSET HARVESTING
+↓
+DEDUP
+↓
+CAPTIONS
+↓
+AUDIO
+↓
+MANIFEST
+↓
+COMPOSITOR
+↓
+DURATION
+↓
+VISUAL QC
+↓
+CONTACT SHEET
+↓
+SCHEDULER
+↓
+YOUTUBE
+↓
+DATABASE
+↓
+MEMORY
+↓
+CLEANUP
+↓
+STATE
+↓
+REPORT
+
+Trace the actual function calls between each stage.
+
+Find the TRUE runtime path, not just what comments/docstrings claim.
+
+============================================================
+PHASE 4 — PRD ↔ CODE RECONCILIATION
+============================================================
+
+For every PRD requirement classify the implementation as:
+
+IMPLEMENTED
+PARTIAL
+MISSING
+CONTRADICTORY
+DEAD
+UNUSED
+STALE
+PRODUCTION RISK
+
+Include the exact file/function responsible.
+
+Do not stop after finding the first few issues.
+
+Continue until the entire repository has been reconciled against the
+complete PRD.
+============================================================
+PHASE 5 — DATABASE / STATE TRUTH
+============================================================
+
+Inspect the real nexus.db and state system.
+
+Verify:
+
+- database path
+- topic registry
+- video registry
+- content memory
+- provenance
+- analytics
+- dynamic weights
+- file numbering
+- topic statuses
+- YouTube IDs
+- scheduled videos
+- current production history
+- state synchronization
+- duplicate protection
+- historical records
+
+Important historical context:
+
+FILE #002 = D'Alembert's paradox
+FILE #003 = accidental duplicate of D'Alembert's paradox
+FILE #004 = Greisen–Zatsepin–Kuzmin limit
+
+The duplicate bug was already diagnosed and fixed.
+
+Verify that the fix is actually present in the current code and database
+logic.
+
+Do not modify/cancel existing YouTube videos automatically.
+
+============================================================
+PHASE 6 — CURRENT PRODUCTION ARCHIVE
+============================================================
+
+Inspect the current production history.
+
+Verify actual consistency between:
+
+DB
+reports
+state
+output files
+YouTube IDs
+topic records
+content memory
+
+Look specifically for stale-data contamination.
+
+A report for FILE_NNN must never accidentally describe another file.
+============================================================
+PHASE 7 — PRODUCTION AUTONOMY
+============================================================
+
+The system must be able to operate without human intervention.
+
+The production loop must:
+
+1. discover a valid new topic
+2. reject duplicates
+3. select the topic
+4. generate hooks
+5. generate narration
+6. verify claims
+7. generate SEO
+8. generate voice
+9. plan claim-local scenes
+10. collect valid assets
+11. reject accidental asset reuse
+12. render
+13. verify actual output
+14. schedule safely
+15. upload privately with future publishAt
+16. persist all required state
+17. clean temporary artifacts
+18. produce an accurate report
+
+Any unsafe condition must result in:
+
+DEFER
+
+not:
+
+fake success
+fallback to duplicate
+partial publish
+immediate public upload
+silent failure
+
+============================================================
+PHASE 8 — AUTONOMOUS LEARNING
+============================================================
+
+Verify that previous videos' analytics are read before selecting the next
+run's strategy.
+
+Own channel:
+YouTube Analytics API v2 only.
+
+Competitors:
+public intelligence only.
+
+No fake metrics.
+
+No double-counting APV when no independent hook signal exists.
+
+Learning must remain:
+- bounded
+- explainable
+- sample guarded
+- observation-window constrained
+
+The current run must never be treated as already learned from.
+
+============================================================
+PHASE 9 — VISUAL INTELLIGENCE
+============================================================
+
+This project is NOT allowed to become:
+
+"download a few images and put zoom effects on them."
+
+Every scene must have:
+- claim-local subject
+- visual purpose
+- relevant asset
+- provenance
+- dedup identity
+- correct asset type
+- correct source classification
+
+No generic filler.
+
+No accidental reuse.
+
+No fake archival evidence.
+
+Pexels only for permitted atmospheric/context use.
+
+Generated graphics only as legitimate last resort.
+
+Generated assets must use the established identity model:
+
+nexus-generated://nexus_graphic_{scene_id}_{claim_hash}
+
+plus real SHA-256 and dHash values.
+
+Inspect the actual compositor and rendering behavior to make sure the code
+really honors the scene manifest rather than making its own asset choices.
+============================================================
+PHASE 10 — FACTUALITY
+============================================================
+
+Verify the complete claim chain:
+
+Wikipedia/source
+→ extracted facts
+→ generated narration
+→ claim verification
+→ finalized script
+→ scene claims
+→ visual assignment
+
+UNSUPPORTED claims:
+regenerate once
+then defer if still unsupported
+
+PARTIALLY_SUPPORTED without sufficient evidence must not silently pass.
+
+Keep the documented limitation that this is an LLM audit, not formal proof.
+
+============================================================
+PHASE 11 — QC
+============================================================
+
+Verify the ACTUAL media output.
+
+Do not rely solely on manifests or logs.
+
+Required:
+- duration validation
+- L1 100%
+- L2 100%
+- L3 100%
+- no black frames
+- no freeze frames
+- scene/source consistency
+- final MP4 consistency
+
+Verify that QC actually blocks YouTube upload when it fails.
+
+============================================================
+PHASE 12 — PUBLISHING SAFETY
+============================================================
+
+Upload must execute only when:
+
+APP_MODE == production
+AND skip_upload == False
+AND readiness == READY
+AND QC == PASS
+
+No CLI bypass.
+
+No:
+--upload
+--force-publish
+or any hidden equivalent.
+
+Publishing:
+privacyStatus = private
+publishAt = future scheduled time
+
+Verify minimum upload gap and readiness buffer in actual runtime logic.
+
+Verify the final publishAt timestamp is the one actually sent to YouTube.
+
+============================================================
+PHASE 13 — IDEMPOTENCY
+============================================================
+
+A rerun must not create duplicate YouTube uploads for the same
+file_number.
+
+Verify:
+file_number → one logical production record → one YouTube video ID
+
+Check retry behavior around:
+- API timeout
+- OAuth refresh
+- upload interruption
+- process restart
+- rerun after partial completion
+
+The system must recover safely instead of generating duplicate videos.
+============================================================
+PHASE 14 — ERROR HANDLING
+============================================================
+
+Inspect all external dependency failure paths:
+
+- Wikipedia
+- Wikimedia
+- Pexels
+- AI providers
+- TTS
+- FFmpeg
+- YouTube OAuth
+- YouTube upload
+- Analytics API
+- filesystem
+- database
+- network
+
+For every failure:
+determine whether the pipeline should retry, fallback, or defer.
+
+No fake success.
+
+No swallowing exceptions that create corrupted production state.
+
+============================================================
+PHASE 15 — AUTOMATION
+============================================================
+
+Inspect GitHub Actions and any scheduler/automation infrastructure.
+
+The final system should support:
+
+laptop OFF
+↓
+scheduled automation
+↓
+production run
+↓
+safe completion/defer
+↓
+persist state
+
+Verify:
+- timezone behavior
+- secrets
+- environment variables
+- artifact lifecycle
+- concurrency
+- duplicate concurrent runs
+- retry behavior
+- logs
+- exit codes
+
+Do not assume local Windows execution is enough.
+
+============================================================
+PHASE 16 — IMPLEMENT EVERYTHING MISSING
+============================================================
+
+ONLY AFTER the full audit is complete:
+
+Fix every genuine gap required by the PRD.
+
+Do not redesign working architecture unnecessarily.
+
+Do not rewrite modules just for style.
+
+Do not add speculative features.
+
+Do not weaken any existing invariant.
+
+Do not turn every implementation constant into an environment variable.
+
+Do not change the established credential variable names.
+
+Preserve the current production behavior that already works.
+
+============================================================
+PHASE 17 — CURRENT PRODUCTION STANDARD
+============================================================
+
+The end state should be:
+
+A single production command can safely run the whole pipeline.
+
+No human needs to manually choose:
+- topic
+- images
+- script
+- scenes
+- schedule
+- YouTube settings
+
+The machine decides using the PRD rules.
+
+The machine may DEFER when requirements cannot be satisfied.
+
+DEFER is a valid autonomous outcome.
+
+Publishing a broken or duplicate video is NOT a valid outcome.
+============================================================
+PHASE 18 — VERIFICATION
+============================================================
+
+After implementation:
+
+Run the existing regression suite.
+
+Run the existing hardcoding/config audit.
+
+Add new tests ONLY where a real production invariant lacks coverage.
+
+Do not create a giant new testing architecture.
+
+Then perform a final repository-wide PRD compliance audit.
+
+Every requirement must end as:
+
+IMPLEMENTED
+or
+EXPLICITLY DEFERRED/NOT APPLICABLE with a reason grounded in the PRD.
+
+============================================================
+PHASE 19 — REAL PRODUCTION RUN
+============================================================
+
+Only after the codebase is fully reconciled:
+
+run the REAL production command:
+
+APP_MODE=production python main.py
+
+Do not use:
+--dry-run
+--skip-upload
+test mode
+--upload
+--force-publish
+
+Use a genuinely novel topic.
+
+Verify the entire chain in real execution.
+
+Before upload verify:
+
+file_number
+topic
+novelty
+claim verification
+scene count
+asset uniqueness
+duration
+audio
+QC
+readiness
+publishAt
+
+Then upload privately with scheduled publishAt.
+
+Persist everything.
+
+Clean temporary data.
+
+Generate the final report.
+
+============================================================
+CRITICAL BEHAVIOR
+============================================================
+
+DO NOT reply with:
+
+"Everything looks good."
+
+DO NOT claim the project is autonomous merely because tests pass.
+
+DO NOT stop at documentation.
+
+DO NOT keep asking me to manually inspect one file at a time.
+
+Inspect the workspace yourself.
+
+Read the actual files.
+
+Trace the actual execution.
+
+Fix the actual implementation.
+
+The goal is a working autonomous production system.
+
+============================================================
+FINAL REPORT
+============================================================
+
+When finished, report:
+
+1. Repository structure understood
+2. Total production-relevant files inspected
+3. PRD requirements audited
+4. Code changes made
+5. Remaining genuine gaps
+6. Database/state status
+7. Test results
+8. Automation status
+9. Real production run result
+10. File number
+11. Topic
+12. YouTube video ID
+13. PublishAt
+14. QC result
+15. Cleanup result
+16. Final autonomy status
+
+Most importantly:
+
+DO NOT STOP AT "TESTING".
+
+UNDERSTAND THE WHOLE SYSTEM.
+IMPLEMENT THE WHOLE PRD.
+THEN RUN THE REAL PRODUCTION PIPELINE.
+
+and before doing run find all flaws

@@ -1,0 +1,132 @@
+You are now the lead engineer for the NEXUS VAULTS 2.0 project.
+
+The workspace already opened is:
+
+C:\YT-SHORTS
+
+DO NOT start by changing random files.
+
+FIRST, fully understand the entire repository and the complete system.
+
+============================================================
+MISSION
+============================================================
+
+Turn NEXUS VAULTS into a genuinely autonomous production YouTube
+Shorts documentary system.
+
+You must understand:
+
+1. The complete PRD Revision 3
+2. The entire repository structure
+3. Every production-relevant source file
+4. Database schema and actual database state
+5. Runtime configuration
+6. AI provider routing
+7. Research pipeline
+8. Content generation pipeline
+9. Claim verification
+10. Scene planning
+11. Image/asset harvesting
+12. Asset deduplication
+13. Generated graphics
+14. Voice generation
+15. Captions
+16. Audio mastering
+17. Render/compositor
+18. Visual QC
+19. Scheduling
+20. YouTube OAuth/upload
+21. Analytics synchronization
+22. Decision engine
+23. Persistent memory/state
+24. Cleanup/lifecycle
+25. Production reports
+26. GitHub Actions / automation if present
+27. All existing tests and regression protections
+28. Existing production artifacts and their relationship to the database
+
+The objective is NOT merely to make tests pass.
+
+The objective is:
+
+PRD → CODE → DATABASE → RUNTIME → YOUTUBE
+
+must behave as one coherent autonomous system.
+
+============================================================
+PHASE 1 — REPOSITORY DISCOVERY
+============================================================
+
+Start by recursively inventorying the entire workspace.
+
+Inspect:
+
+- all .py files
+- all .md documentation
+- all config files
+- .env.example
+- workflow files
+- shell/PowerShell scripts
+- requirements/dependency files
+- database files/schema/migrations
+- test files
+- state files
+- manifests
+- output/report files
+- relevant media metadata
+- README/documentation
+- git status/history where useful
+
+Do NOT read or print secret values from .env.
+
+For .env:
+- determine which configuration keys exist
+- determine whether required production configuration exists
+- NEVER print secret values
+
+Ignore only files that are clearly generated dependencies/cache/binaries
+such as node_modules, Python caches, .git internals, etc., unless a file
+inside them is explicitly required to understand runtime behavior.
+
+For production outputs:
+inspect metadata and reports where useful.
+If an image/contact sheet/video can be visually inspected, inspect it.
+
+============================================================
+PHASE 2 — READ THE ENTIRE PRD
+============================================================
+
+Find the current:
+
+NEXUS VAULTS 2.0 PRD Revision 3
+
+Read it completely.
+
+Do NOT assume earlier versions are authoritative.
+
+Revision 3 is the current contract.
+
+Build an internal requirement map covering EVERY normative requirement.
+
+Do not paraphrase away important details.
+
+Capture:
+- hard rules
+- pipeline order
+- configuration rules
+- database rules
+- novelty rules
+- claim verification
+- visual rules
+- dedup rules
+- QC rules
+- scheduling rules
+- upload rules
+- analytics rules
+- learning rules
+- storage rules
+- reporting rules
+- CLI rules
+- production invariants
+- golden regression requirements

@@ -1,0 +1,121 @@
+============================================================
+PHASE 18 — VERIFICATION
+============================================================
+
+After implementation:
+
+Run the existing regression suite.
+
+Run the existing hardcoding/config audit.
+
+Add new tests ONLY where a real production invariant lacks coverage.
+
+Do not create a giant new testing architecture.
+
+Then perform a final repository-wide PRD compliance audit.
+
+Every requirement must end as:
+
+IMPLEMENTED
+or
+EXPLICITLY DEFERRED/NOT APPLICABLE with a reason grounded in the PRD.
+
+============================================================
+PHASE 19 — REAL PRODUCTION RUN
+============================================================
+
+Only after the codebase is fully reconciled:
+
+run the REAL production command:
+
+APP_MODE=production python main.py
+
+Do not use:
+--dry-run
+--skip-upload
+test mode
+--upload
+--force-publish
+
+Use a genuinely novel topic.
+
+Verify the entire chain in real execution.
+
+Before upload verify:
+
+file_number
+topic
+novelty
+claim verification
+scene count
+asset uniqueness
+duration
+audio
+QC
+readiness
+publishAt
+
+Then upload privately with scheduled publishAt.
+
+Persist everything.
+
+Clean temporary data.
+
+Generate the final report.
+
+============================================================
+CRITICAL BEHAVIOR
+============================================================
+
+DO NOT reply with:
+
+"Everything looks good."
+
+DO NOT claim the project is autonomous merely because tests pass.
+
+DO NOT stop at documentation.
+
+DO NOT keep asking me to manually inspect one file at a time.
+
+Inspect the workspace yourself.
+
+Read the actual files.
+
+Trace the actual execution.
+
+Fix the actual implementation.
+
+The goal is a working autonomous production system.
+
+============================================================
+FINAL REPORT
+============================================================
+
+When finished, report:
+
+1. Repository structure understood
+2. Total production-relevant files inspected
+3. PRD requirements audited
+4. Code changes made
+5. Remaining genuine gaps
+6. Database/state status
+7. Test results
+8. Automation status
+9. Real production run result
+10. File number
+11. Topic
+12. YouTube video ID
+13. PublishAt
+14. QC result
+15. Cleanup result
+16. Final autonomy status
+
+Most importantly:
+
+DO NOT STOP AT "TESTING".
+
+UNDERSTAND THE WHOLE SYSTEM.
+IMPLEMENT THE WHOLE PRD.
+THEN RUN THE REAL PRODUCTION PIPELINE.
+
+and before doing run find all flaws

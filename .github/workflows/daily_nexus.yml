@@ -1,0 +1,141 @@
+name: NEXUS Daily
+
+# Runs at 00:00 America/New_York year-round.
+# GitHub cron is UTC only, so we fire at BOTH possible UTC times and a gate
+# step lets exactly one of them through (the one where New York time is hour 0).
+on:
+  schedule:
+    - cron: "0 4 * * *"   # = 00:00 during EDT
+    - cron: "0 5 * * *"   # = 00:00 during EST
+  workflow_dispatch:
+    inputs:
+      force_run:
+        description: "Skip the midnight-ET gate (manual test)"
+        type: boolean
+        default: true
+
+# Only one production run at a time; never cancel a run that is mid-upload.
+concurrency:
+  group: nexus-production
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # needed to save state to the nexus-state branch
+
+jobs:
+  run:
+    # Windows runner on purpose: the renderer uses a Windows font path (C:/WINDOWS/fonts/...).
+    runs-on: windows-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: pwsh
+
+    env:
+      # ---- secrets (values come from GitHub Secrets, never printed) ----
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+      YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+      YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+      PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+      # ---- non-secret config (copy any other NON-secret lines from your .env here) ----
+      APP_MODE: production
+      AI_PROVIDER_CHAIN: nvidia,groq,gemini,openrouter
+      NVIDIA_MODEL: nvidia/nemotron-3-super-120b-a12b
+      SCHEDULE_TZ: America/New_York
+      # In review mode (NEXUS_LIVE not "true") keep the rendered files so you can watch them.
+      TEST_KEEP_ARTIFACTS: ${{ vars.NEXUS_LIVE == 'true' && 'false' || 'true' }}
+
+    steps:
+      - name: Midnight-ET gate
+        id: gate
+        run: |
+          $et = [System.TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([DateTime]::UtcNow, 'Eastern Standard Time')
+          "New York time now: $et"
+          $manual = ('${{ github.event_name }}' -eq 'workflow_dispatch') -and ('${{ inputs.force_run }}' -eq 'true')
+          if ($manual -or $et.Hour -eq 0) {
+            "go=true" >> $env:GITHUB_OUTPUT
+          } else {
+            "go=false" >> $env:GITHUB_OUTPUT
+            "Not the midnight-ET window. Exiting cleanly."
+          }
+
+      - name: Checkout code
+        if: steps.gate.outputs.go == 'true'
+        uses: actions/checkout@v4
+
+      - name: Checkout state branch
+        if: steps.gate.outputs.go == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: nexus-state
+          path: state
+
+      - name: Set up Python
+        if: steps.gate.outputs.go == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        if: steps.gate.outputs.go == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install yt-dlp tzdata
+          choco install ffmpeg -y --no-progress
+          ffmpeg -version | Select-Object -First 1
+
+      - name: Restore state
+        if: steps.gate.outputs.go == 'true'
+        run: |
+          New-Item -ItemType Directory -Force .nexus_state | Out-Null
+          if (-not (Test-Path state/nexus.db)) { throw "state/nexus.db missing on nexus-state branch. Seed it first." }
+          Copy-Item state/nexus.db .nexus_state/nexus.db -Force
+          "State restored."
+
+      - name: Run NEXUS
+        if: steps.gate.outputs.go == 'true'
+        run: |
+          $live = '${{ vars.NEXUS_LIVE }}' -eq 'true'
+          if ($live) {
+            "LIVE MODE: real production run"
+            python main.py
+          } else {
+            "REVIEW MODE: rendering only, NO upload, state will NOT be saved"
+            python main.py --skip-upload
+          }
+
+      # Review mode: download this from the run page and watch it before going live.
+      - name: Upload rendered files for review
+        if: always() && steps.gate.outputs.go == 'true' && vars.NEXUS_LIVE != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexus-review-output
+          path: OUTPUT
+          if-no-files-found: ignore
+          retention-days: 3
+
+      # Live mode only: save state even if the run deferred or failed.
+      - name: Save state
+        if: always() && steps.gate.outputs.go == 'true' && vars.NEXUS_LIVE == 'true'
+        run: |
+          if (Test-Path .nexus_state/nexus.db) {
+            Copy-Item .nexus_state/nexus.db state/nexus.db -Force
+            Push-Location state
+            git config user.name "nexus-bot"
+            git config user.email "nexus-bot@users.noreply.github.com"
+            git add nexus.db
+            git diff --cached --quiet
+            if ($LASTEXITCODE -ne 0) {
+              git commit -m "state $(Get-Date -Format s)"
+              git push origin HEAD:nexus-state
+            }
+            Pop-Location
+          } else {
+            "No .nexus_state/nexus.db found; nothing to save."
+          }
