@@ -41,6 +41,9 @@ GENERATED NARRATION SCRIPT:
 
 TOPIC: {topic}
 
+You must evaluate EVERY SINGLE SENTENCE of the narration script individually. Do NOT combine sentences or skip sentences.
+If the script has 6 sentences, your JSON array MUST contain 6 items.
+
 For each sentence in the narration script, determine whether it is:
   SUPPORTED           — directly derivable from the source article text above
   PARTIALLY_SUPPORTED — implied or partially derivable from the source.
@@ -63,6 +66,7 @@ Rules:
 - Be strict. If a specific date, number, or causal claim has no evidence in the source text, mark it UNSUPPORTED.
 - PARTIALLY_SUPPORTED without a source_evidence quote is treated as UNSUPPORTED by the pipeline.
 - Do not invent supporting evidence. Quote the nearest relevant passage verbatim.
+- Every sentence must be audited. Do not summarize or aggregate multiple sentences into one object.
 - Ignore the closing channel sign-off signature 'NEXUS VAULTS.' as it is a brand sign-off, not an empirical historical claim.
 """
 

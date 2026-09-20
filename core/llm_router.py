@@ -36,7 +36,18 @@ def extract_json(raw: str) -> str:
         except Exception:
             pass
 
-    # 2. Use JSONDecoder.raw_decode scanning for valid JSON objects or arrays
+    # 2. Prefer outer square brackets or braces if present, allowing downstream regex recovery
+    first_bracket = clean.find("[")
+    last_bracket = clean.rfind("]")
+    first_brace = clean.find("{")
+    last_brace = clean.rfind("}")
+
+    if first_bracket != -1 and last_bracket != -1 and (first_brace == -1 or first_bracket < first_brace):
+        outer_arr = clean[first_bracket:last_bracket + 1].strip()
+        if outer_arr:
+            return outer_arr
+
+    # 3. Use JSONDecoder.raw_decode scanning for valid JSON objects or arrays
     for start_char in ("{", "["):
         pos = 0
         while pos < len(clean):
@@ -53,11 +64,6 @@ def extract_json(raw: str) -> str:
             except Exception:
                 pass
             pos = idx + 1
-
-    # 3. Fallback to outer braces or square brackets
-    first_brace = clean.find("{")
-    last_brace = clean.rfind("}")
-    first_bracket = clean.find("[")
     last_bracket = clean.rfind("]")
 
     candidates = []

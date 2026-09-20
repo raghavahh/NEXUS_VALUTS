@@ -177,6 +177,16 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, force_topic:
             )
             return
         topic_name = info.get("title", force_topic)
+        from research.media_preflight import evaluate_media_preflight
+        preflight_report = evaluate_media_preflight(topic_name)
+        if preflight_report["status"] not in ("ELIGIBLE", "STRONG"):
+            log.error(
+                f"[FORCE-TOPIC MEDIA PREFLIGHT REJECTED] Forced topic '{topic_name}' failed media preflight "
+                f"(Status: {preflight_report['status']} | Relevant: {preflight_report['relevant_count']} | "
+                f"Est. Survivors: {preflight_report['estimated_survivors']}). Production deferred."
+            )
+            return
+
         cluster = "Unexplained Events"
         sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', summary) if s.strip()]
         facts = sentences[:3]
@@ -184,7 +194,11 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, force_topic:
         source_url = info.get("url", f"https://en.wikipedia.org/wiki/{topic_name.replace(' ', '_')}")
         # Forced topics skip discovery/growth-brain; report honestly that no
         # competitor sampling was performed.
-        growth_brain = {"competitor_analysis": {"sampled_count": 0}}
+        growth_brain = {
+            "competitor_analysis": {"sampled_count": 0},
+            "topic": {"title": topic_name, "cluster": cluster},
+            "media_preflight": preflight_report
+        }
     else:
         candidates = discover_candidates(target_count=config.research.max_topics)
         if not candidates:

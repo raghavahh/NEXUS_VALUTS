@@ -11,6 +11,7 @@ from core.logging import log
 
 from core.database import get_weight, verify_topic_novelty
 from research.yt_intel import sample_competitor_shorts
+from research.media_preflight import evaluate_media_preflight
 
 GROWTH_BRAIN_PROMPT_TEMPLATE = """
 You are the Chief Intelligence Officer for NEXUS VAULTS, an elite investigative mystery channel.
@@ -125,7 +126,12 @@ def produce_growth_brain(candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
     # 3. Rank ONLY eligible candidates (winner MUST be in eligible_candidates)
     ranked = sorted(eligible_candidates, key=score_candidate, reverse=True)
     winner = ranked[0]
-    assert winner in eligible_candidates, "CRITICAL: Winner must belong to preflight eligible_candidates!"
+    if winner not in eligible_candidates:
+        log.error(
+            f"[MEDIA PREFLIGHT INVARIANT VIOLATION] Winner '{winner.get('title')}' is not in eligible_candidates! "
+            "Pipeline failing closed."
+        )
+        return None
     log.info(
         f"Selected winning topic: '{winner['title']}' (Cluster: {winner['cluster']} | "
         f"Preflight: {winner['media_preflight']['status']} | Relevant Assets: {winner['media_preflight']['relevant_count']} | "

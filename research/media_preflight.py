@@ -58,10 +58,10 @@ def evaluate_media_preflight(topic: str) -> Dict[str, Any]:
     est_survivors = int(round(len(rel_article_assets) * 0.85 + len(rel_commons_assets) * 0.55))
 
     # Contract thresholds:
-    # < 4 relevant authentic assets -> REJECT
-    # 4-5 -> ELIGIBLE
-    # 6+ -> STRONG
-    if rel_total < 4 or est_survivors < 3:
+    # < 4 relevant authentic assets OR < 4 estimated survivors -> REJECT
+    # 4-5 relevant authentic assets AND >= 4 estimated survivors -> ELIGIBLE
+    # 6+ relevant authentic assets AND >= 5 estimated survivors -> STRONG
+    if rel_total < 4 or est_survivors < 4:
         status = "REJECT"
     elif rel_total <= 5:
         status = "ELIGIBLE"
