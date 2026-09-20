@@ -4,8 +4,8 @@ __pycache__/
 *.pyo
 
 # Local database & state (persisted via GitHub Actions Artifacts)
-*.db
 .nexus_state/
+nexus.db*
 
 # Generated production media
 OUTPUT/
@@ -24,7 +24,6 @@ scratch/
 _junk_review/
 .agents/
 .nexus_state.backup/
-nexus.db.backup*
 *.backup
 test_output.txt
 extracted_requirements.json
@@ -34,3 +33,4 @@ inspect_db.py
 test_db.py
 test_functions.py
 test_circuit_breaker.py
+

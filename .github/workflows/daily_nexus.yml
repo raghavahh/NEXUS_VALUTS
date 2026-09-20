@@ -1,4 +1,4 @@
-name: NEXUS Daily
+  name: NEXUS Daily
 
 # Runs at 00:00 America/New_York year-round.
 # GitHub cron is UTC only, so we fire at BOTH possible UTC times and a gate
