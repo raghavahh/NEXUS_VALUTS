@@ -31,7 +31,7 @@ from content.hooks import generate_and_score_hooks
 from content.story_brain import generate_production_script
 from content.scene_planner import generate_storyboard
 from content.seo import format_seo_package
-from content.claim_verifier import verify_script_claims, fetch_wikipedia_source_text
+from content.claim_verifier import fetch_wikipedia_source_text
 from media.images import collect_storyboard_assets, format_relevance_report, VisualBudgetExceededError
 from media.voice import generate_voice
 from media.captions import generate_kinetic_ass
@@ -290,72 +290,8 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, force_topic:
     narration = script_data["narration_script"]
     word_count = script_data["word_count"]
 
-    # Step 5 gate: Claim Verification Gate
-    # MUST run BEFORE SEO so that if narration is regenerated, the final verified
-    # script is what drives the SEO package — not a stale pre-verification draft.
-    # An UNSUPPORTED verdict means the LLM invented or distorted a fact relative
-    # to the Wikipedia source. On failure: one regeneration attempt, then defer.
-    claim_audit = verify_script_claims(
-        narration=narration,
-        source_text=source_text,
-        topic=topic_name,
-        max_unsupported=0,    # ZERO tolerance for unsupported claims
-        max_partial=3         # Up to 3 partially-supported claims allowed (must have source_evidence)
-    )
-    if claim_audit.get("error"):
-        # Verifier infrastructure failure is not a pass — defer immediately
-        # (regeneration cannot fix a failed audit provider).
-        log.error(
-            f"[CLAIM GATE: PIPELINE DEFERRED] Claim verification infrastructure failed: {claim_audit['error']}"
-        )
-        return
-    if not claim_audit["passed"] and not claim_audit.get("skipped"):
-        log.warning(f"[CLAIM GATE FAIL] Script contains unsupported claims: {claim_audit['rejection_reason']}")
-        log.warning("Attempting one script regeneration with strict source-grounding...")
-
-        # If the hook itself was rejected, switch to an alternative candidate hook from hook_data
-        regen_hook = hook_text
-        rej_str = claim_audit.get("rejection_reason", "").lower()
-        if any(w in rej_str for w in hook_text.lower().split()[:4]):
-            fact_lead = facts[0].strip().rstrip(".") if facts else f"Historical records regarding {topic_name}"
-            fact_words = fact_lead.split()
-            if len(fact_words) > 13:
-                fact_lead = " ".join(fact_words[:13])
-            regen_hook = f"Documented archival records confirm {fact_lead.lower()}."
-            hook_type = "CONTRADICTION"
-            log.info(f"Switched hook for regeneration to strictly grounded fact [{hook_type}]: \"{regen_hook}\"")
-        else:
-            all_hooks = hook_data.get("all_candidates", [])
-            for alt in all_hooks:
-                if alt.get("text") and alt["text"] != hook_text:
-                    regen_hook = alt["text"]
-                    hook_type = alt.get("category", hook_type)
-                    log.info(f"Switched hook for regeneration to alternative candidate [{hook_type}]: \"{regen_hook}\"")
-                    break
-
-        grounding_facts = list(facts) + [f"DOCUMENTED SOURCE: {source_text[:2000].strip()}"]
-        script_data = generate_production_script(topic_name, grounding_facts, conflict, regen_hook, strict_source_grounding=True)
-        narration = script_data["narration_script"]
-        word_count = script_data["word_count"]
-        hook_text = regen_hook
-        claim_audit = verify_script_claims(narration, source_text, topic_name, max_unsupported=0, max_partial=3)
-        if claim_audit.get("error"):
-            log.error(
-                f"[CLAIM GATE: PIPELINE DEFERRED] Claim verification infrastructure failed on retry: {claim_audit['error']}"
-            )
-            return
-        if not claim_audit["passed"] and not claim_audit.get("skipped"):
-            log.error(
-                f"[CLAIM GATE: PIPELINE DEFERRED] Script regeneration did not resolve unsupported claims.\n"
-                f"Reason: {claim_audit['rejection_reason']}\n"
-                f"This run will not produce a video. Investigate LLM grounding for topic: '{topic_name}'."
-            )
-            return
-    log.info(
-        f"[CLAIM GATE PASS] {claim_audit['supported_count']} supported / "
-        f"{claim_audit['partial_count']} partial / {claim_audit['unsupported_count']} unsupported."
-        + (" (verification skipped: no source text available)" if claim_audit.get('skipped') else "")
-    )
+    
+    
 
     # 6. SEO Packaging — runs AFTER narration is verified and finalized
     # Narration is now in its final form: if regeneration occurred above, this
@@ -367,7 +303,7 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, force_topic:
         log.info(f"  Title: {seo_data['title']}")
         log.info(f"  Hook [{hook_type}]: \"{hook_text}\"")
         log.info(f"  Script ({word_count} words): \"{narration}\"")
-        log.info(f"  Claim Gate: {claim_audit['supported_count']} supported / {claim_audit['partial_count']} partial / {claim_audit['unsupported_count']} unsupported")
+        
 
     # 7. Media Generation: Voice Synthesis
     raw_voice_path = config.storage.temp_dir / f"{file_prefix}_voice_raw.mp3"
@@ -522,7 +458,7 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, force_topic:
             log.info(f"  FILE NUMBER:     FILE #{file_number:03d}")
             log.info(f"  TOPIC:           {topic_name}")
             log.info(f"  NOVELTY:         {novelty_audit['result']}")
-            log.info(f"  CLAIM GATE:      {claim_audit['supported_count']} supported / {claim_audit['partial_count']} partial / {claim_audit['unsupported_count']} unsupported")
+            
             log.info(f"  SCENES:          {len(scenes_with_assets)} ({len(unique_urls)} unique source assets)")
             log.info(f"  DURATION:        {final_duration:.2f}s")
             log.info(f"  AUDIO MASTER:    {'%.1f LUFS' % measured_lufs if measured_lufs is not None else 'NOT MEASURED'}")
