@@ -6,7 +6,7 @@ name: NEXUS Daily
 on:
   schedule:
     - cron: "0 4 * * *"   # = 00:00 during EDT (UTC-4)
-    - cron: "0 5 * * *"   # = 00:00 during EST (UTC-5)
+    
   workflow_dispatch:
     inputs:
       force_run:
