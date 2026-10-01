@@ -1,5 +1,5 @@
 """
-NEXUS VAULTS 2.0 - Headless YouTube Publisher
+AI Video Factory - Headless YouTube Publisher
 Uploads rendered Shorts via YouTube Data API v3 with quota tracking.
 Consumes exact OAuth credentials (YT_CLIENT_ID, YT_CLIENT_SECRET, YT_REFRESH_TOKEN)
 through core.config. Zero hardcoded tokens or secrets.

@@ -1,5 +1,5 @@
 """
-NEXUS VAULTS 2.0 - Structured Console & Audit Logging
+AI Video Factory - Structured Console & Audit Logging
 """
 
 import sys
@@ -18,7 +18,7 @@ if hasattr(sys.stderr, "reconfigure"):
     except Exception:
         pass
 
-class NexusFormatter(logging.Formatter):
+class AIVFFormatter(logging.Formatter):
     GREY = "\x1b[38;20m"
     CYAN = "\x1b[36;20m"
     GREEN = "\x1b[32;20m"
@@ -40,12 +40,12 @@ class NexusFormatter(logging.Formatter):
         formatter = logging.Formatter(log_fmt, datefmt="%H:%M:%S")
         return formatter.format(record)
 
-def setup_logger(name: str = "nexus") -> logging.Logger:
+def setup_logger(name: str = "aivf") -> logging.Logger:
     logger = logging.getLogger(name)
     if not logger.handlers:
         logger.setLevel(logging.INFO)
         handler = logging.StreamHandler(sys.stdout)
-        handler.setFormatter(NexusFormatter())
+        handler.setFormatter(AIVFFormatter())
         logger.addHandler(handler)
     return logger
 

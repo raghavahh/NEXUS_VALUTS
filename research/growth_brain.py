@@ -1,20 +1,38 @@
 """
-NEXUS VAULTS 2.0 - Growth Brain Synthesizer
+AI Video Factory - Growth Brain Synthesizer
 Evaluates candidates, cross-references competitor intelligence, and produces
 the master Growth Brain JSON before a single video frame is rendered.
+Channel-driven via Channel Brain.
 """
 
 import json
 from typing import Dict, Any, List
 from core.llm_router import route_task, extract_json
 from core.logging import log
+from core.channel_brain import get_channel_brain
 
 from core.database import get_weight, verify_topic_novelty
 from research.yt_intel import sample_competitor_shorts
 from research.media_preflight import evaluate_media_preflight
 
+def _build_growth_brain_prompt_context() -> str:
+    """Build Channel Brain context for growth brain synthesis."""
+    brain = get_channel_brain()
+    return brain.get_prompt_context("topic_selection")
+
 GROWTH_BRAIN_PROMPT_TEMPLATE = """
-You are the Chief Intelligence Officer for NEXUS VAULTS, an elite investigative mystery channel.
+You are the Chief Intelligence Officer for {channel_name}, a {channel_niche} channel.
+{creative_directive}
+
+{learning_memory}
+
+Channel Profile:
+- Name: {channel_name}
+- Handle: {channel_handle}
+- Niche: {channel_niche}
+- Audience: {channel_audience}
+- Language: {channel_language}
+
 We have selected the following real verified topic from the archives:
 
 Topic: {title}
@@ -31,46 +49,46 @@ Requirements:
 4. Exactly 3 verified archival facts and 1 core unresolved paradox.
 
 Required JSON Structure:
-{{
-  "topic": {{
+{
+  "topic": {
     "name": "{title}",
     "cluster": "{cluster}",
     "demand_signal": 85,
     "novelty_score": 80
-  }},
-  "competitor_analysis": {{
+  },
+  "competitor_analysis": {
     "dominant_competitor_hooks": ["..."],
     "unexploited_content_gap": "..."
-  }},
-  "story": {{
+  },
+  "story": {
     "confidence": 0.96,
     "source_url": "{url}",
     "known_facts": ["fact 1", "fact 2", "fact 3"],
     "unsolved_conflict": "The core detail that defies explanation"
-  }},
-  "creative": {{
+  },
+  "creative": {
     "narrative_structure": "Timeline-Contradiction",
     "hook_variants": [
-      {{"type": "Timeline-Contradiction", "text": "..."}},
-      {{"type": "Physical-Evidence-Loop", "text": "..."}},
-      {{"type": "Declassified-Leak", "text": "..."}},
-      {{"type": "Impossible-Survival", "text": "..."}}
+      {"type": "Timeline-Contradiction", "text": "..."},
+      {"type": "Physical-Evidence-Loop", "text": "..."},
+      {"type": "Declassified-Leak", "text": "..."},
+      {"type": "Impossible-Survival", "text": "..."}
     ],
     "selected_hook": "...",
     "visual_strategy": "archival documents + map pinpoint + evidence highlighting"
-  }},
-  "publishing": {{
-    "title": "The Mystery Nobody Can Explain | NEXUS VAULTS",
+  },
+  "publishing": {
+    "title": "The Mystery Nobody Can Explain | {channel_name}",
     "description": "...",
-    "tags": ["nexus vaults", "shorts", "mystery", "unsolved"],
-    "category_id": "28"
-  }},
-  "experiment": {{
+    "tags": ["{channel_handle_lower}", "shorts", "documentary", "{channel_niche_lower}"],
+    "category_id": "{category_id}"
+  },
+  "experiment": {
     "variable": "Hook Angle",
     "hypothesis": "Focusing on physical evidence increases 'Chose to View' rate."
-  }}
-}}
-"""
+  }
+}
+}"""
 
 def score_candidate(candidate: Dict[str, Any]) -> float:
     """Calculates overall viability score for a candidate topic."""
@@ -141,17 +159,29 @@ def produce_growth_brain(candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
     # Gather YouTube competitor intelligence
     intel = sample_competitor_shorts(winner["title"])
     
+    # Build Channel Brain context for the prompt
+    brain = get_channel_brain()
+
     # Query Multi-Tier Brain
     prompt = GROWTH_BRAIN_PROMPT_TEMPLATE.format(
         title=winner["title"],
         cluster=winner["cluster"],
         summary=winner["summary"],
         url=winner["url"],
-        competitor_titles=", ".join(intel["competitor_titles"] or ["None found"])
+        competitor_titles=", ".join(intel["competitor_titles"] or ["None found"]),
+        channel_name=brain.profile.name or "AI Video Factory",
+        channel_handle=brain.profile.handle or "aivideofactory",
+        channel_handle_lower=(brain.profile.handle or "aivideofactory").lower(),
+        channel_niche=brain.profile.niche or "documentary",
+        channel_niche_lower=(brain.profile.niche or "documentary").lower(),
+        channel_audience=brain.profile.audience or "general",
+        channel_language=brain.profile.language or "en",
+        category_id=brain.publishing_prefs.category_id or "27",
+        creative_directive=brain.creative_directive.directive if brain.creative_directive.directive else "",
+        learning_memory=brain.learning_memory.get_compact_context() if brain.learning_memory.recent_topics else ""
     )
-    
     try:
-        system_prompt = "You are the autonomous Growth Intelligence Engine for NEXUS VAULTS. You output valid raw JSON only."
+        system_prompt = f"You are the autonomous Growth Intelligence Engine for {brain.profile.name or 'AI Video Factory'}. You output valid raw JSON only."
         raw_response = route_task(prompt, system_prompt, task_type="research")
         clean_json = extract_json(raw_response)
         growth_brain = json.loads(clean_json)

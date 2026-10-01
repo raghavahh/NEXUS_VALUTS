@@ -1,5 +1,5 @@
 """
-NEXUS VAULTS 2.0 - Cinematic Atmospheric Audio Engine & Mastering Stage
+AI Video Factory - Cinematic Atmospheric Audio Engine & Mastering Stage
 Implements:
 1. Multi-layered atmospheric drone bed (level set once, by config).
 2. Narration ducking via FFmpeg sidechaincompress (ambient attenuated under speech).

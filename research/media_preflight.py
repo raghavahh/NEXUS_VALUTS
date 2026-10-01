@@ -1,5 +1,5 @@
 """
-NEXUS VAULTS 2.0 - Media Preflight Engine
+AI Video Factory - Media Preflight Engine
 Enforces PRD Section 6 Visual Budget requirements BEFORE topic selection / Growth Brain.
 
 CONTRACT:

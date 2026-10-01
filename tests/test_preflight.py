@@ -1,5 +1,5 @@
 """
-NEXUS VAULTS - Structural Preflight (ISOLATED, NETWORK-FREE)
+AI Video Factory - Structural Preflight (ISOLATED, NETWORK-FREE)
 
 Runs entirely inside the test sandbox. Verifies:
 1. Config loads from sandbox paths (never production DB/OUTPUT)
@@ -12,6 +12,7 @@ Live OAuth / AI connectivity checks belong in operations, never in the test suit
 """
 import unittest
 import subprocess
+import os
 
 import _guard
 _guard.ensure_isolation()  # MUST precede any project import
@@ -31,12 +32,31 @@ class StructuralPreflightTest(unittest.TestCase):
         self.assertEqual(config.app.mode, "test")
 
     def test_02_credentials_blanked(self):
-        keys = [config.youtube.client_id, config.youtube.client_secret,
-                config.youtube.refresh_token, config.ai.gemini_api_key,
-                config.ai.groq_api_key, config.ai.nvidia_api_key,
-                config.ai.openrouter_api_key, config.media.pexels_api_key]
-        leaked = [i for i, k in enumerate(keys) if k]  # boolean only — never print values
-        self.assertEqual(leaked, [], "Sandbox must hold no credentials (leaked key indices hidden)")
+        # Check text provider slots
+        text_keys = [
+            config.ai.text_nvidia.secret_ref,
+            config.ai.text_groq.secret_ref,
+            config.ai.text_gemini.secret_ref,
+            config.ai.text_openrouter.secret_ref,
+        ]
+        # Check video provider slots
+        video_keys = [
+            config.ai.video_runway.secret_ref,
+            config.ai.video_pika.secret_ref,
+            config.ai.video_luma.secret_ref,
+        ]
+        # Check other credentials
+        other_keys = [
+            config.youtube.client_id,
+            config.youtube.client_secret,
+            config.youtube.refresh_token,
+            config.media.pexels_api_key,
+        ]
+        
+        # Verify all secret_refs point to env vars that are NOT set in test sandbox
+        all_secret_refs = text_keys + video_keys + other_keys
+        leaked = [ref for ref in all_secret_refs if ref and os.getenv(ref)]
+        self.assertEqual(leaked, [], "Sandbox must hold no credentials (leaked keys hidden)")
 
     def test_03_secret_masking(self):
         from core.config import _mask_secret

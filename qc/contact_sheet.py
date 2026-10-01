@@ -1,5 +1,5 @@
 """
-NEXUS VAULTS 2.0 - Storyboard Contact Sheet Generator
+AI Video Factory - Storyboard Contact Sheet Generator
 Generates a multi-panel visual contact sheet grid from ACTUAL RENDERED SCENE CLIPS.
 Displays exact rendered visuals, timestamps, motion styles, and claim purposes.
 Saved to config.storage.storyboard_dir.
@@ -42,7 +42,7 @@ def generate_contact_sheet(
 
     # Header banner
     draw.rectangle([(0, 0), (sheet_w, header_h)], fill=(10, 12, 16))
-    header_text = f"NEXUS VAULTS | PRODUCTION STORYBOARD DOSSIER: FILE #{file_number:03d}"
+    header_text = f"AI VIDEO FACTORY | PRODUCTION STORYBOARD DOSSIER: VIDEO #{file_number:03d}"
     sub_text = f"TOPIC: {topic_name[:42]} | {num_scenes} VERIFIED SCENE CLIPS (ACTUAL RENDERS)"
 
     draw.text((20, 20), header_text, fill=(255, 215, 0))

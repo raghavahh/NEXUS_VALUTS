@@ -1,5 +1,5 @@
 """
-NEXUS VAULTS 2.0 - 3-Layer Visual Verification Pipeline & QC Gate
+AI Video Factory - 3-Layer Visual Verification Pipeline & QC Gate
 Layer 1: Clip Existence & Manifest Asset Binding (SHA-256).
 Layer 2: Expected Transformed Frame <-> Actual Scene Clip Frame.
 Layer 3: Expected Scene Timeline <-> Final MP4 Multi-Point Sampling.

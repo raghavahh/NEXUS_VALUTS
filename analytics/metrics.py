@@ -1,5 +1,5 @@
 """
-NEXUS VAULTS 2.0 - Analytics Metrics & Scoring Formula
+AI Video Factory - Analytics Metrics & Scoring Formula
 
 HONEST SIGNAL MODEL:
   YouTube Analytics API v2 provides ONE retention signal: averageViewPercentage (APV).

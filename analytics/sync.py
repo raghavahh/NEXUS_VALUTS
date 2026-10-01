@@ -1,5 +1,5 @@
 """
-NEXUS VAULTS 2.0 - Live Channel Analytics & Demand Feedback Synchronizer
+AI Video Factory - Live Channel Analytics & Demand Feedback Synchronizer
 OWN CHANNEL: YouTube Analytics API v2 (authenticated OAuth) — authoritative.
 COMPETITORS: public YouTube Data API / yt-dlp — separate module (research/yt_intel.py).
 
@@ -273,7 +273,7 @@ def sync_channel_analytics() -> Dict[str, Any]:
         d_stat = data_api_stats.get(v_id)
 
         if not a_stat and not d_stat:
-            log.debug(f"FILE #{file_num:03d}: No analytics data returned from either API for {v_id}.")
+            log.debug(f"VIDEO #{file_num:03d}: No analytics data returned from either API for {v_id}.")
             continue
 
         if a_stat:
@@ -296,7 +296,7 @@ def sync_channel_analytics() -> Dict[str, Any]:
             viewed_vs_swiped = 0.0
             subs_gained = 0
             source_label = "YouTube Data API v3 (basic counts only — no retention data)"
-            log.warning(f"FILE #{file_num:03d}: Analytics API unavailable; recording basic counts only. "
+            log.warning(f"VIDEO #{file_num:03d}: Analytics API unavailable; recording basic counts only. "
                         "Retention metrics will be missing from this sync.")
 
         with get_connection() as conn:
@@ -328,7 +328,7 @@ def sync_channel_analytics() -> Dict[str, Any]:
             "source": source_label
         })
         log.info(
-            f"FILE #{file_num:03d} analytics synced via {source_label}: "
+            f"VIDEO #{file_num:03d} analytics synced via {source_label}: "
             f"{views} views, {likes} likes, {avg_view_pct:.1f}% avg retention."
         )
 

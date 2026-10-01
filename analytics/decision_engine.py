@@ -1,5 +1,5 @@
 """
-NEXUS VAULTS 2.0 - Self-Learning Decision Engine
+AI Video Factory - Self-Learning Decision Engine
 Updates topic cluster and hook weights in SQLite based on algorithm feedback.
 
 DESIGN RULES:

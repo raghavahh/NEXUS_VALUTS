@@ -1,10 +1,10 @@
 """
-NEXUS VAULTS 2.0 - Storyboard Engine & Claim-Level Visual Director
+AI Video Factory - Scene Planner Engine & Claim-Level Visual Director
 Every narration claim maps to an explicit Visual Intent:
 Claim -> Claim-Local Primary Visual Subject -> Supporting Subjects -> Visual Purpose -> Visual Type -> Exact Queries -> Motion -> Composition.
 Enforces Exact Person, Exact Object, Exact Document, Exact Location, and Exact Scientific Concept Rules.
 Guarantees claim-local entity extraction so the global topic NEVER leaks into individual scenes.
-Driven strictly by config.scene settings from .env.
+Driven strictly by config.scene settings from .env and Channel Brain.
 """
 
 import json
@@ -13,6 +13,13 @@ from typing import Dict, Any, List, Tuple
 from core.llm_router import route_task, extract_json
 from core.config import config
 from core.logging import log
+from core.channel_brain import get_channel_brain
+
+
+def _build_scene_prompt_context() -> str:
+    """Build Channel Brain context for scene planning."""
+    brain = get_channel_brain()
+    return brain.get_prompt_context("scene_planning")
 
 VISUAL_PURPOSES = [
     "ESTABLISH_LOCATION", "IDENTIFY_PERSON", "SHOW_PRIMARY_EVIDENCE",
@@ -46,7 +53,18 @@ COMPOSITION_STYLES = [
 ]
 
 STORYBOARD_PROMPT = """
-You are the Executive Visual Director for NEXUS VAULTS 2.0.
+You are the Executive Visual Director for {channel_name}, a {channel_niche} channel.
+{creative_directive}
+
+{learning_memory}
+
+Channel Profile:
+- Name: {channel_name}
+- Handle: {channel_handle}
+- Niche: {channel_niche}
+- Audience: {channel_audience}
+- Language: {channel_language}
+
 Given this spoken script for an investigative documentary:
 "{script}"
 
@@ -69,33 +87,42 @@ CRITICAL ANTI-DRIFT RULES (NON-NEGOTIABLE):
    5. Exact Scientific Concept / Mechanism / Equation explained in this beat.
 3. Every scene MUST assign an explicit `visual_type` (e.g. PORTRAIT, ARCHIVAL_PHOTO, DOCUMENT, DIAGRAM, OBJECT_CLOSEUP, GENERATED_GRAPHIC).
 4. Exactly 3 ranked search queries focused STRICTLY on `primary_visual_subject`:
-   - query_1: Specific primary entity, artifact, portrait, or document.
-   - query_2: Primary subject + visual type or historical context.
-   - query_3: Secondary contextual query for primary subject.
+   - query_1: Specific primary entity + visual_type (e.g. "1903 Wright Flyer archival photo", "Jean le Rond d'Alembert portrait").
+   - query_2: Same primary entity + context + visual_type (e.g. "1903 Wright Flyer Kitty Hawk December 1903 archival", "d'Alembert potential flow theorem 1752 diagram").
+   - query_3: Broader visual context + visual_type (e.g. "Kitty Hawk 1903 aviation site archival", "18th century fluid dynamics manuscripts archival").
+5. NEVER use the global topic as a search query. NEVER use temporal tokens as primary subjects.
+6. `motion_style` MUST be one of: """ + ", ".join(MOTION_STYLES) + """.
+7. `composition_style` MUST be one of: """ + ", ".join(COMPOSITION_STYLES) + """.
+8. `visual_purpose` MUST be one of: """ + ", ".join(VISUAL_PURPOSES) + """.
+9. `visual_type` MUST be one of: """ + ", ".join(VISUAL_TYPES) + """.
+10. Return raw JSON array of scene objects ONLY (no markdown fences). Each scene object:
+{
+  "scene_id": 1,
+  "start": 0.0,
+  "end": 3.2,
+  "duration": 3.2,
+  "narration": "First N words of this beat",
+  "story_beat": "hook|evidence|conclusion",
+  "claim": "The exact claim being visually supported",
+  "primary_visual_subject": "Exact Person/Object/Event/Location/Concept from THIS beat",
+  "supporting_visual_subjects": ["Supporting entity 1", "Supporting entity 2"],
+  "visual_purpose": "IDENTIFY_PERSON|SHOW_PRIMARY_EVIDENCE|...",
+  "visual_type": "PORTRAIT|ARCHIVAL_PHOTO|DOCUMENT|DIAGRAM|...",
+  "search_queries": ["query_1", "query_2", "query_3"],
+  "motion_intent": "portrait_slow_push|document_inspection_scroll|...",
+  "motion_style": "portrait_slow_push|document_inspection_scroll|...",
+  "composition_intent": "hero_full_frame|document_framed_elevated|...",
+  "transition_in": "hard_cut",
+  "transition_out": "hard_cut",
+  "audio_intent": "major_reveal|evidence_hit|normal"
+}
 
-Return raw JSON only (no markdown):
-{{
-  "scenes": [
-    {{
-      "scene_id": 1,
-      "start": 0.0,
-      "end": 3.0,
-      "narration": "exact spoken sentence fragment",
-      "story_beat": "hook",
-      "claim": "core claim being spoken",
-      "primary_visual_subject": "exact claim-local subject",
-      "supporting_visual_subjects": ["secondary term 1", "secondary term 2"],
-      "visual_purpose": "SHOW_PRIMARY_EVIDENCE",
-      "visual_type": "ARCHIVAL_PHOTO",
-      "search_queries": ["query 1", "query 2", "query 3"],
-      "motion_intent": "hero_reveal",
-      "composition_intent": "hero_full_frame",
-      "transition_in": "hard_cut",
-      "transition_out": "hard_cut",
-      "audio_intent": "major_reveal"
-    }}
-  ]
-}}
+FORMAT INSTRUCTIONS:
+- The output MUST be a valid JSON array.
+- NO text before or after the array.
+- NO markdown fences.
+- Exactly {target_count} scenes.
+- Total duration across scenes must sum to {total_duration} seconds.
 """
 
 def _clean_phrase_boundaries(text: str) -> str:
@@ -165,12 +192,15 @@ def _resolve_contextual_claim_subject(claim: str, topic: str, story_context: str
     # Build a topic-relative exclusion set (dynamic, never hardcoded to a specific topic)
     _topic_norm = topic.lower()
     _topic_tokens = set(re.sub(r"[^a-z\s]", "", _topic_norm).split())
-    _exclusion_set = {_topic_norm, "nexus vaults"} | _topic_tokens
+    # Build channel-aware exclusion set
+    brain = get_channel_brain()
+    channel_name_lower = (brain.profile.name or "AI Video Factory").lower()
+    _exclusion_set = {_topic_norm, channel_name_lower} | _topic_tokens
 
     STOPWORDS = {
         "the", "a", "an", "in", "on", "at", "to", "for", "with", "but", "however",
         "when", "while", "where", "why", "how", "what", "then", "now", "if", "that",
-        "this", "and", "yet", "proving", "matters", "nexus", "vaults", "claimed", "claiming",
+        "this", "and", "yet", "proving", "matters", "claimed", "claiming",
         "was", "wasn", "wasnt", "is", "isn", "isnt", "are", "aren", "arent", "were", "weren", "werent",
         "not", "part", "strange", "true", "false", "even", "still", "just", "only", "about",
         "into", "over", "under", "after", "before", "defying", "without", "been", "has", "have", "had",
@@ -239,7 +269,7 @@ def _resolve_contextual_claim_subject(claim: str, topic: str, story_context: str
     if not loc_matches:
         if any(k in clean_lower for k in ["university", "academy", "institute", "laboratory", "lab", "centre", "center", "tunnel", "facility"]):
             loc_matches = re.findall(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)(?=\s+(?:University|Academy|Institute|Laboratory|Lab|Centre|Center|Tunnel|Facility))", clean)
-    LOC_STOPWORDS = {"the", "nexus", "fact", "reality", "truth", "theory", "wind", "fluid", "air", "sea"} | MONTH_NAMES
+    LOC_STOPWORDS = {"the", "fact", "reality", "truth", "theory", "wind", "fluid", "air", "sea"} | MONTH_NAMES
     filtered_locs = [l for l in loc_matches if l.lower() not in LOC_STOPWORDS and len(l) > 2]
     if filtered_locs and any(k in clean_lower for k in ["outside", "constructed", "built", "located", "stationed", "university", "academy", "institute", "laboratory"]):
         return f"{filtered_locs[0]} Historical Location", [topic], "ARCHIVAL_PHOTO", "ESTABLISH_LOCATION"
@@ -362,7 +392,7 @@ def _split_into_scene_claims(script: str, num_scenes: int, topic: str) -> List[s
     
     parts = [p.strip().replace("_", " ")
              for p in re.split(r'(?<=[.!?])\s+|(?<=[,;])\s+|\s+(?:while|yet|however|proving|where)\s+', protected) if p.strip()]
-    meaningful = [p for p in parts if p.lower() not in ("nexus vaults.", "nexus vaults") and len(p.split()) >= 2]
+    meaningful = [p for p in parts if p.lower() not in (f"{channel_name_lower}.", channel_name_lower) and len(p.split()) >= 2]
     if not meaningful:
         meaningful = parts or [topic]
 
@@ -415,6 +445,9 @@ def generate_storyboard(script: str, topic: str, total_duration: float) -> List[
         pass
 
     words = script.split()
+    
+    # Build Channel Brain context
+    brain = get_channel_brain()
     prompt = STORYBOARD_PROMPT.format(
         script=script,
         topic=topic,
@@ -425,11 +458,18 @@ def generate_storyboard(script: str, topic: str, total_duration: float) -> List[
         max_count=max_count,
         min_duration=min_dur,
         max_duration=max_dur,
-        asset_hints=asset_hints
+        asset_hints=asset_hints,
+        channel_name=brain.profile.name or "AI Video Factory",
+        channel_handle=brain.profile.handle or "aivideofactory",
+        channel_niche=brain.profile.niche or "documentary",
+        channel_audience=brain.profile.audience or "general",
+        channel_language=brain.profile.language or "en",
+        creative_directive=brain.creative_directive.directive if brain.creative_directive.directive else "",
+        learning_memory=brain.learning_memory.get_compact_context() if brain.learning_memory.recent_topics else ""
     )
 
     try:
-        raw_response = route_task(prompt, task_type="story", system_instruction="You are an expert investigative documentary visual director. Output strictly valid JSON.")
+        raw_response = route_task(prompt, task_type="story", system_instruction=f"You are an expert investigative documentary visual director for {brain.profile.name or 'AI Video Factory'}. Output strictly valid JSON array only. No markdown, no prose.")
         clean = extract_json(raw_response)
         data = json.loads(clean)
         scenes = data if isinstance(data, list) else data.get("scenes", [])

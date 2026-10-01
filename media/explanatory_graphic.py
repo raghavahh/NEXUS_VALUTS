@@ -1,5 +1,5 @@
 """
-NEXUS VAULTS 2.0 - Truthful Explanatory Graphic Engine
+AI Video Factory - Truthful Explanatory Graphic Engine
 Generates claim-specific, high-resolution (1080x1920) technical schematics and
 concept exhibits customized for each scene's exact primary visual subject and claim.
 
@@ -12,7 +12,7 @@ ZERO FABRICATED EVIDENCE RULE (hard):
   generated exhibit can never be mistaken for authentic archival material.
 
 Every generated graphic is unique via the established identity model:
-nexus-generated://nexus_graphic_{scene_id}_{claim_hash}
+ai-generated://ai_graphic_{scene_id}_{claim_hash}
 plus real SHA-256 and dHash computed by the caller (media/images.py).
 """
 
@@ -35,7 +35,7 @@ def _claim_keywords(claim: str, subject: str, max_terms: int = 6) -> List[str]:
         "after", "before", "been", "has", "have", "had", "will", "would",
         "could", "should", "than", "then", "them", "they", "each", "every",
         "some", "any", "all", "not", "no", "yes", "still", "just", "only",
-        "about", "between", "through", "during", "without", "within", "nexus", "vaults"
+        "about", "between", "through", "during", "without", "within"
     }
     seen: List[str] = []
     for word in re.findall(r"[A-Za-z][A-Za-z\-']{3,}", claim):
@@ -432,8 +432,8 @@ def create_truthful_explanatory_graphic(
         font_mono = ImageFont.load_default()
 
     # 3. Header Banners
-    draw.text((80, 130), "NEXUS VAULTS // INVESTIGATIVE DOSSIER", fill=(120, 150, 180), font=font_header)
-    draw.text((80, 170), f"EXHIBIT REF: NV-2.0-{scene_id:02d} // GENERATED ILLUSTRATION // {diagram_type}", fill=tick_color, font=font_mono)
+    draw.text((80, 130), "AI VIDEO FACTORY // INVESTIGATIVE DOSSIER", fill=(120, 150, 180), font=font_header)
+    draw.text((80, 170), f"EXHIBIT REF: AI-2.0-{scene_id:02d} // GENERATED ILLUSTRATION // {diagram_type}", fill=tick_color, font=font_mono)
     draw.line([(80, 210), (width - 80, 210)], fill=(0, 160, 220), width=2)
 
     # 4. Primary Visual Subject Callout
@@ -505,7 +505,7 @@ def create_truthful_explanatory_graphic(
 
     # 7. Provenance Footer — explicit honesty labeling
     draw.line([(80, 1720), (width - 80, 1720)], fill=(40, 60, 80), width=1)
-    draw.text((80, 1740), f"PROVENANCE: NEXUS Explanatory Graphic Engine ({diagram_type})", fill=(120, 150, 180), font=font_mono)
+    draw.text((80, 1740), f"PROVENANCE: AI Video Factory Explanatory Graphic Engine ({diagram_type})", fill=(120, 150, 180), font=font_mono)
     draw.text((80, 1775), "ILLUSTRATIVE SCHEMATIC - NOT ARCHIVAL FOOTAGE", fill=(255, 170, 60), font=font_mono)
     draw.text((80, 1810), "VERIFICATION: Claim-Local Visual Intent Satisfied // Zero Unrelated Filler", fill=(0, 220, 160), font=font_mono)
 
@@ -539,22 +539,22 @@ def create_truthful_explanatory_graphic(
     )
 
     # Generated asset identity model:
-    # canonical_url uses nexus-generated:// URI scheme (not file://) so that:
+    # canonical_url uses ai-generated:// URI scheme (not file://) so that:
     #   1. Uniqueness assertion holds: each scene gets a distinct scene_id + claim_hash
     #   2. No fake HTTP URLs are invented to satisfy the URL uniqueness check
     #   3. SHA-256 of the actual file content still provides binary uniqueness
     #   4. The identifier is stable — file moves don't break the asset record
     claim_hash = hashlib.sha256(claim.encode("utf-8")).hexdigest()[:8]
-    generated_asset_id = f"nexus_graphic_{scene_id:02d}_{claim_hash}"
+    generated_asset_id = f"ai_graphic_{scene_id:02d}_{claim_hash}"
     meta = {
         "asset_id": generated_asset_id,
         "url": f"file://{output_path.resolve()}",         # local path for FFmpeg access
-        "canonical_url": f"nexus-generated://{generated_asset_id}",   # stable unique identity
-        "title": f"NEXUS Scientific Schematic: {primary_subj}",
+        "canonical_url": f"ai-generated://{generated_asset_id}",   # stable unique identity
+        "title": f"AI Video Factory Scientific Schematic: {primary_subj}",
         "description": f"Dedicated {diagram_type} schematic illustrating: {claim}",
-        "author": "NEXUS Visual Director",
-        "license": "NEXUS Original Illustration",
-        "source": "NEXUS_GENERATED",
+        "author": "AI Video Factory Visual Director",
+        "license": "AI Video Factory Original Illustration",
+        "source": "AI_GENERATED",
         "visual_type": "GENERATED_GRAPHIC",
         "evidence_class": "GENERATED",
         "generated": True,

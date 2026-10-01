@@ -1,5 +1,5 @@
 """
-NEXUS VAULTS 2.0 - Dynamic Phrase-Level Caption Engine
+AI Video Factory - Dynamic Phrase-Level Caption Engine
 Driven by config.caption and config.render settings.
 """
 
@@ -28,7 +28,7 @@ def generate_kinetic_ass(word_timings: List[Dict[str, Any]], output_ass_path: Pa
     chunk_size = config.caption.words_per_line
 
     header = f"""[Script Info]
-Title: Nexus Vaults Documentary Captions
+Title: AI Video Factory Documentary Captions
 ScriptType: v4.00+
 WrapStyle: 0
 ScaledBorderAndShadow: yes

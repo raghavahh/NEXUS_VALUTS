@@ -1,5 +1,5 @@
 """
-NEXUS VAULTS 2.0 - Golden Regression Test
+AI Video Factory - Golden Regression Test
 Synthetic pipeline verification using 12 intentionally distinct visual assets.
 Proves:
 1. N distinct assets -> N distinct scene clips.
@@ -28,7 +28,7 @@ from qc.frame_verifier import verify_scene_clips_and_frames
 
 class GoldenRegressionTest(unittest.TestCase):
     def setUp(self):
-        self.test_dir = Path(tempfile.mkdtemp(prefix="nexus_regression_"))
+        self.test_dir = Path(tempfile.mkdtemp(prefix="aivf_regression_"))
         self.assets_dir = self.test_dir / "assets"
         self.assets_dir.mkdir(parents=True, exist_ok=True)
         self.temp_scenes_dir = self.test_dir / "temp_scenes"

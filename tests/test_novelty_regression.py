@@ -1,5 +1,5 @@
 """
-NEXUS VAULTS - Topic Novelty & Non-Repetition Regression (FULLY ISOLATED)
+AI Video Factory - Topic Novelty & Non-Repetition Regression (FULLY ISOLATED)
 
 This test NEVER touches production state. It builds its own duplicate fixture
 inside a sandbox database via tests/_guard.py, so results are identical
@@ -28,8 +28,8 @@ from core.database import (  # noqa: E402
 )
 
 PROD_REPO = Path(__file__).resolve().parent.parent
-PROD_DB = PROD_REPO / "nexus.db"
-PROD_STATE = PROD_REPO / ".nexus_state" / "nexus.db"
+PROD_DB = PROD_REPO / "channel.db"
+PROD_STATE = PROD_REPO / ".factory_state" / "channel.db"
 PROD_OUTPUT = PROD_REPO / "OUTPUT"
 
 DUP_TITLE = "ZZTest Fixture Paradox"          # test-owned duplicate fixture
@@ -100,7 +100,7 @@ class TopicNoveltyRegressionTest(unittest.TestCase):
 
     def test_01_exact_duplicate_normalized_key_rejected(self):
         variants = [DUP_TITLE, DUP_TITLE.lower(), f"The Mystery of {DUP_TITLE}",
-                    f"FILE #099 | The Mystery of {DUP_TITLE} #Shorts", DUP_TITLE.upper()]
+                    f"VIDEO #099 | The Mystery of {DUP_TITLE} #Shorts", DUP_TITLE.upper()]
         for v in variants:
             self.assertEqual(normalize_topic_key(v), normalize_topic_key(DUP_TITLE))
             self.assertTrue(is_topic_already_used(v), f"Expected duplicate detection for '{v}'")
@@ -141,10 +141,10 @@ class TopicNoveltyRegressionTest(unittest.TestCase):
         self.assertEqual(audit["duplicate_angle_check"], "PASS")
 
     def test_06_production_invariance_after_suite_activity(self):
-        """Next production file stays FILE #002; no test rows leak into production."""
+        """Next production file stays VIDEO #002; no test rows leak into production."""
         snap = _prod_snapshot()
         if snap["next_file"] is not None:
-            self.assertEqual(snap["next_file"], 2, "Production next-file-number must remain FILE #002")
+            self.assertEqual(snap["next_file"], 2, "Production next-file-number must remain VIDEO #002")
         self._assert_prod_unchanged()
 
 

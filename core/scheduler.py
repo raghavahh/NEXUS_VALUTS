@@ -1,5 +1,5 @@
 """
-NEXUS VAULTS 2.0 - Production Scheduling & Clock Management
+AI Video Factory - Production Scheduling & Clock Management
 Enforces US Timezone Scheduling (default America/New_York), Scheduled Publication for Tomorrow,
 Minimum Upload Gap Protection (MIN_UPLOAD_GAP_HOURS), and the One-Hour Preparation Guarantee.
 Zero reliance on local laptop / machine time.

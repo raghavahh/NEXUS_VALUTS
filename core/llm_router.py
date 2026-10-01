@@ -1,6 +1,6 @@
 """
-NEXUS VAULTS 2.0 - 100% Cloud Task-Based LLM Router
-Dynamically routes requests through the AI_PROVIDER_CHAIN defined in .env.
+AI Video Factory - 100% Cloud Task-Based LLM Router
+Dynamically routes requests through the AI_TEXT_PROVIDER_CHAIN defined in .env.
 Zero local LLM / Ollama dependencies. Zero hardcoded model names.
 Aborts cleanly if all configured providers fail.
 """
@@ -12,6 +12,7 @@ import socket
 import urllib.request
 import urllib.error
 from typing import Optional
+import os
 from core.config import config
 from core.logging import log
 
@@ -100,17 +101,28 @@ def extract_json(raw: str) -> str:
     return clean
 
 
-def call_openrouter(prompt: str, system_prompt: str = "", task_type: str = "general") -> Optional[str]:
-    """OpenRouter Cloud API caller using configuration from .env"""
-    api_key = config.ai.openrouter_api_key
-    base_url = config.ai.openrouter_api_url.rstrip("/")
+def _get_provider_config(provider_name: str):
+    """Get provider slot config by name."""
+    provider_map = {
+        "openrouter": config.ai.text_openrouter,
+        "groq": config.ai.text_groq,
+        "nvidia": config.ai.text_nvidia,
+        "gemini": config.ai.text_gemini,
+    }
+    return provider_map.get(provider_name.lower())
+
+def _make_openai_call(provider_name: str, prompt: str, system_prompt: str, task_type: str) -> Optional[str]:
+    """Generic OpenAI-compatible API caller."""
+    provider_cfg = _get_provider_config(provider_name)
+    if not provider_cfg or not provider_cfg.enabled:
+        return None
+
+    api_key = os.getenv(provider_cfg.secret_ref, "")
     if not api_key:
         return None
 
-    models = [config.ai.openrouter_model]
-    for fb in ("liquid/lfm-2.5-2.6b:free", "nvidia/nemotron-3-super-120b-a12b:free"):
-        if fb not in models:
-            models.append(fb)
+    base_url = provider_cfg.endpoint.rstrip("/")
+    model = provider_cfg.model
 
     # Set temperature and top_p based on task type
     if task_type in ("hooks", "script", "growth"):
@@ -121,139 +133,13 @@ def call_openrouter(prompt: str, system_prompt: str = "", task_type: str = "gene
         top_p = 0.95
     else:
         temperature = 0.7
-        top_p = 0.9
-
-    for model in models:
-        url = f"{base_url}/chat/completions"
-        payload = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system_prompt or "Documentary intelligence system."},
-                {"role": "user", "content": prompt}
-            ],
-            "temperature": temperature,
-            "top_p": top_p,
-            "max_tokens": 3000
-        }
-
-        try:
-            req = urllib.request.Request(
-                url,
-                data=json.dumps(payload).encode("utf-8"),
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key}",
-                    "HTTP-Referer": "https://github.com/nexus-vaults",
-                    "X-Title": "Nexus Vaults Engine"
-                }
-            )
-            with urllib.request.urlopen(req, timeout=config.ai.request_timeout) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-                if text:
-                    log.info(f"Generated via OpenRouter ({model})")
-                    return text
-        except urllib.error.HTTPError as e:
-            log.warning(f"OpenRouter ({model}) HTTP {e.code}: {e.reason}")
-            if e.code in (401, 403):
-                return None
-            elif e.code == 429:
-                time.sleep(2.0)
-            continue
-        except Exception as e:
-            log.warning(f"OpenRouter ({model}) error: {e}")
-            continue
-    return None
-
-def call_groq(prompt: str, system_prompt: str = "", task_type: str = "general") -> Optional[str]:
-    """Groq Cloud API caller using configuration from .env"""
-    api_key = config.ai.groq_api_key
-    model = config.ai.groq_model
-    base_url = config.ai.groq_api_url.rstrip("/")
-    if not api_key:
-        return None
-
-    # Set temperature and top_p based on task type
-    if task_type in ("hooks", "script", "growth"):
-        temperature = 1.0
-        top_p = 0.95
-    elif task_type in ("claim_verification", "storyboard_json", "seo_structure"):
-        temperature = 0.2
-        top_p = 0.95
-    else:
-        temperature = 0.7
-        top_p = 0.9
-
-    models_to_try = [model]
-    for alt in ("qwen/qwen3.8-27b", "openai/gpt-oss-120b"):
-        if alt not in models_to_try:
-            models_to_try.append(alt)
-
-    for current_model in models_to_try:
-        url = f"{base_url}/chat/completions"
-        payload = {
-            "model": current_model,
-            "messages": [
-                {"role": "system", "content": system_prompt or "Documentary intelligence system."},
-                {"role": "user", "content": prompt}
-            ],
-            "temperature": temperature,
-            "top_p": top_p,
-            "max_tokens": 6000
-        }
-
-        try:
-            req = urllib.request.Request(
-                url,
-                data=json.dumps(payload).encode("utf-8"),
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key}",
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                }
-            )
-            with urllib.request.urlopen(req, timeout=config.ai.request_timeout) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-                if text:
-                    log.info(f"Generated via Groq ({current_model})")
-                    return text
-        except urllib.error.HTTPError as e:
-            log.warning(f"Groq ({current_model}) HTTP {e.code}: {e.reason}")
-            if e.code in (401, 403):
-                return None
-            elif e.code == 429:
-                time.sleep(2.0)
-            continue
-        except Exception as e:
-            log.warning(f"Groq ({current_model}) error: {e}")
-            continue
-    return None
-
-def call_nvidia(prompt: str, system_prompt: str = "", task_type: str = "general") -> Optional[str]:
-    """NVIDIA NIM Cloud API caller using configuration from .env"""
-    api_key = config.ai.nvidia_api_key
-    model = config.ai.nvidia_model
-    base_url = config.ai.nvidia_api_url.rstrip("/")
-    if not api_key:
-        return None
-
-    # Set temperature and top_p based on task type
-    if task_type in ("hooks", "script", "growth"):
-        temperature = 1.0
-        top_p = 0.95
-    elif task_type in ("claim_verification", "storyboard_json", "seo_structure"):
-        temperature = 0.2
-        top_p = 0.95
-    else:
-        temperature = 0.6
         top_p = 0.9
 
     url = f"{base_url}/chat/completions"
     payload = {
         "model": model,
         "messages": [
-            {"role": "system", "content": system_prompt or "Documentary scriptwriter and critic."},
+            {"role": "system", "content": system_prompt or "Documentary intelligence system."},
             {"role": "user", "content": prompt}
         ],
         "temperature": temperature,
@@ -261,62 +147,62 @@ def call_nvidia(prompt: str, system_prompt: str = "", task_type: str = "general"
         "max_tokens": 3000
     }
 
-    max_attempts = 2
-    for attempt in range(max_attempts):
-        try:
-            req = urllib.request.Request(
-                url,
-                data=json.dumps(payload).encode("utf-8"),
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key}"
-                }
-            )
-            with urllib.request.urlopen(req, timeout=config.ai.request_timeout) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-                if text:
-                    log.info(f"Generated via NVIDIA NIM ({model})")
-                    return text
-        except urllib.error.HTTPError as e:
-            log.warning(f"NVIDIA NIM ({model}) HTTP {e.code}: {e.reason}")
-            if e.code in (401, 403, 404):
-                break
-            elif e.code == 429 and attempt < max_attempts - 1:
-                import time
-                retry_after = e.headers.get("Retry-After")
-                if retry_after:
-                    try:
-                        wait_time = int(retry_after)
-                    except ValueError:
-                        wait_time = 5.0
-                else:
-                    wait_time = 5.0
-                time.sleep(wait_time)
-            else:
-                break
-        except Exception as e:
-            log.warning(f"NVIDIA NIM ({model}) error: {e}")
-            break
+    # Provider-specific headers
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+    if provider_name == "openrouter":
+        headers["HTTP-Referer"] = "https://github.com/aivideofactory"
+        headers["X-Title"] = "AI Video Factory"
+
+    try:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers
+        )
+        with urllib.request.urlopen(req, timeout=provider_cfg.timeout) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+            if text:
+                log.info(f"Generated via {provider_name.capitalize()} ({model})")
+                return text
+    except urllib.error.HTTPError as e:
+        log.warning(f"{provider_name.capitalize()} ({model}) HTTP {e.code}: {e.reason}")
+        if e.code in (401, 403):
+            return None
+        elif e.code == 429:
+            time.sleep(3.0)
+    except Exception as e:
+        log.warning(f"{provider_name.capitalize()} ({model}) error: {e}")
+
     return None
 
-_LAST_GEMINI_CALL = 0.0
+def call_openrouter(prompt: str, system_prompt: str = "", task_type: str = "general") -> Optional[str]:
+    """OpenRouter Cloud API caller using configuration from .env"""
+    return _make_openai_call("openrouter", prompt, system_prompt, task_type)
+
+def call_groq(prompt: str, system_prompt: str = "", task_type: str = "general") -> Optional[str]:
+    """Groq Cloud API caller using configuration from .env"""
+    return _make_openai_call("groq", prompt, system_prompt, task_type)
+
+def call_nvidia(prompt: str, system_prompt: str = "", task_type: str = "general") -> Optional[str]:
+    """NVIDIA NIM Cloud API caller using configuration from .env"""
+    return _make_openai_call("nvidia", prompt, system_prompt, task_type)
 
 def call_gemini(prompt: str, system_prompt: str = "", task_type: str = "general") -> Optional[str]:
     """Google Gemini Cloud API caller using configuration from .env"""
-    global _LAST_GEMINI_CALL
-    api_key = config.ai.gemini_api_key
-    model = config.ai.gemini_model
-    base_url = config.ai.gemini_api_url.rstrip("/")
+    provider_cfg = _get_provider_config("gemini")
+    if not provider_cfg or not provider_cfg.enabled:
+        return None
+
+    api_key = os.getenv(provider_cfg.secret_ref, "")
     if not api_key:
         return None
 
-    # Defensive 2.0s call pacing to adhere strictly to Google AI Studio free-tier RPM limits
-    now = time.time()
-    elapsed = now - _LAST_GEMINI_CALL
-    if elapsed < 2.0:
-        time.sleep(2.0 - elapsed)
-    _LAST_GEMINI_CALL = time.time()
+    base_url = provider_cfg.endpoint.rstrip("/")
+    model = provider_cfg.model
 
     # Set temperature and top_p based on task type
     if task_type in ("hooks", "script", "growth"):
@@ -327,51 +213,56 @@ def call_gemini(prompt: str, system_prompt: str = "", task_type: str = "general"
         top_p = 0.95
     else:
         temperature = 0.7
-        top_p = 0.9  # default for other task_types
+        top_p = 0.9
 
-    models_to_try = [model]
-    for alt in ("gemini-3.6-flash", "gemini-3.8-flash"):
-        if alt not in models_to_try:
-            models_to_try.append(alt)
-
-    for current_model in models_to_try:
-        url = f"{base_url}/models/{current_model}:generateContent?key={api_key}"
+    for fb_model in [model, "gemini-1.5-pro", "gemini-1.0-pro"]:
+        url = f"{base_url}/models/{fb_model}:generateContent?key={api_key}"
         payload = {
-            "contents": [{"parts": [{"text": f"{system_prompt}\n\n{prompt}"}]}],
-            "generationConfig": {"temperature": temperature, "top_p": top_p, "maxOutputTokens": 4096}
+            "contents": [
+                {"role": "user", "parts": [{"text": prompt}]}
+            ],
+            "systemInstruction": {"parts": [{"text": system_prompt or "Documentary intelligence system."}]} if system_prompt else None,
+            "generationConfig": {
+                "temperature": temperature,
+                "topP": top_p,
+                "maxOutputTokens": 3000
+            }
         }
+        if payload["systemInstruction"] is None:
+            del payload["systemInstruction"]
+
         try:
             req = urllib.request.Request(
                 url,
                 data=json.dumps(payload).encode("utf-8"),
                 headers={"Content-Type": "application/json"}
             )
-            with urllib.request.urlopen(req, timeout=config.ai.request_timeout) as resp:
+            with urllib.request.urlopen(req, timeout=provider_cfg.timeout) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 candidates = data.get("candidates", [])
                 if candidates:
                     text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
                     if text:
-                        log.info(f"Generated via Gemini ({current_model})")
+                        log.info(f"Generated via Gemini ({fb_model})")
                         return text
         except urllib.error.HTTPError as e:
-            log.warning(f"Gemini ({current_model}) HTTP {e.code}: {e.reason}")
+            log.warning(f"Gemini ({fb_model}) HTTP {e.code}: {e.reason}")
             if e.code in (401, 403):
                 return None
             elif e.code == 429:
                 time.sleep(3.0)
-            continue
         except Exception as e:
-            log.warning(f"Gemini ({current_model}) error: {e}")
-            continue
+            log.warning(f"Gemini ({fb_model}) error: {e}")
 
     return None
+
 PROVIDER_DISPATCH = {
     "openrouter": call_openrouter,
     "groq": call_groq,
     "nvidia": call_nvidia,
     "gemini": call_gemini,
 }
+
 def route_task(prompt: str, system_prompt: str = "", system_instruction: str = "", task_type: str = "general") -> str:
     """
     100% Cloud Task Router:
@@ -422,5 +313,5 @@ def route_task(prompt: str, system_prompt: str = "", system_instruction: str = "
 
     raise RuntimeError(
         f"All configured cloud AI providers failed ({', '.join(ordered_chain)}). "
-        "Clean pipeline abort: please verify your API keys and provider models in C:\\YT-SHORTS\\.env."
+        "Clean pipeline abort: please verify your API keys and provider models in .env."
     )

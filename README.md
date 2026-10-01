@@ -1,6 +1,6 @@
-# NEXUS VAULTS 2.0 — Autonomous Documentary Shorts Production Engine
+# AI Video Factory — Autonomous Documentary Shorts Production Engine
 
-> **Channel:** @NEXUS_VAULTS  
+> **Channel:** Configured via CHANNEL_HANDLE  
 > **PRD Conformance:** Authoritative PRD.md (Full Compliance)  
 > **Runtime Environment:** Python 3.11+, FFmpeg with `libx264`, SQLite 3.40+  
 
@@ -8,7 +8,7 @@
 
 ## 1. Overview
 
-**NEXUS VAULTS 2.0** is an autonomous documentary generation engine that produces broadcast-grade, 30–40 second vertical (1080×1920) YouTube Shorts. Each video explores real, verifiable historical enigmas, scientific paradoxes, and classified history without human intervention.
+**AI Video Factory** is an autonomous documentary generation engine that produces broadcast-grade, 30–40 second vertical (1080×1920) YouTube Shorts. Each video explores real, verifiable historical enigmas, scientific paradoxes, and documented anomalies without human intervention.
 
 ### Core Guarantees
 - **Zero Visual Sludge:** Every scene features either an authentic archival asset (Wikimedia Commons / Wikipedia) or a claim-derived schematic graphic. Stock footage (Pexels) is strictly barred from primary evidence.
@@ -62,7 +62,7 @@ flowchart TD
 20. **YouTube Resumable Upload:** Uploads as `private` with `publishAt` schedule.
 21. **Post-Upload Verification:** Queries YouTube Data API v3 to confirm indexing and scheduled status.
 22. **Content Memory Commit:** Writes lightweight topic summary to prevent future conceptual repetition.
-23. **State Packaging:** Syncs database backup to `.nexus_state/nexus.db`.
+23. **State Packaging:** Syncs database backup to `.factory_state/channel.db`.
 24. **Temporary Asset Lifecycle:** Prunes intermediate render clips while preserving master outputs.
 
 ---
@@ -80,7 +80,7 @@ C:\YT-SHORTS\
 ├── publisher/         # YouTube Data API v3 resumable uploader
 ├── tests/             # Golden regression suite, novelty tests, hardcoding audit, preflight
 ├── OUTPUT/            # Rendered master MP4s, contact sheets, and temporary scene cache
-├── .nexus_state/      # Authoritative database state backup
+├── .factory_state/    # Authoritative database state backup
 ├── PRD.md             # Authoritative Product Requirements Document
 ├── main.py            # Primary production orchestrator
 └── .env.example       # Full configuration template with zero exposed secrets
@@ -128,7 +128,7 @@ python -m unittest discover -s tests -p "test_*.py"
 To execute the autonomous production pipeline:
 
 ```bash
-# Standard autonomous daily run (governed by .env APP_MODE=production)
+# Standard local production run (governed by .env APP_MODE=production)
 python main.py
 
 # Dry-run execution (generates video locally, skips YouTube upload)
@@ -137,6 +137,14 @@ python main.py --dry-run
 # Test a specific topic without uploading
 python main.py --dry-run --force-topic "Fermi Paradox"
 ```
+
+### Manual GitHub Actions run
+
+The workflow is intentionally manual-only; it has no `schedule`, push, or pull-request trigger.
+Open **Actions → AI Video Factory Manual Run → Run workflow**, optionally enter a forced topic,
+and start it yourself. Configure repository secrets for the providers and YouTube, and set the
+`AI_VIDEO_FACTORY_LIVE` repository variable to `true` only when publishing is explicitly desired.
+The `factory-state` branch stores the SQLite database and Channel Brain between live runs.
 
 ---
 

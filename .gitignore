@@ -6,6 +6,8 @@ __pycache__/
 # Local database & state (persisted via GitHub Actions Artifacts)
 .nexus_state/
 nexus.db*
+.factory_state/
+channel.db*
 
 # Generated production media
 OUTPUT/
@@ -24,6 +26,8 @@ scratch/
 _junk_review/
 .agents/
 .nexus_state.backup/
+*.bak
+*.tmp
 *.backup
 test_output.txt
 extracted_requirements.json
@@ -33,4 +37,10 @@ inspect_db.py
 test_db.py
 test_functions.py
 test_circuit_breaker.py
+build_middle*.py
+patch_config*.py
+write_middle*.py
+update_hooks.py
+core/llm_router_middle.py
+core/llm_router_part*.py
 

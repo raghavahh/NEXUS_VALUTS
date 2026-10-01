@@ -1,30 +1,30 @@
 """
-NEXUS VAULTS 2.0 - State Persistence Store
-Prevents git repo pollution by storing nexus.db as GitHub Actions Artifacts
+AI Video Factory - State Persistence Store
+Prevents git repo pollution by storing channel.db as GitHub Actions Artifacts
 or external storage rather than committing binary DBs to git history.
 """
 
 import os
 import shutil
 from pathlib import Path
-from core.config import DB_PATH, BASE_DIR
+from core.config import DB_PATH, config
 from core.logging import log
 
-# Test isolation: when NEXUS_TEST_SANDBOX is set (by tests/_guard.py), state
-# persistence is redirected into the sandbox — never the production .nexus_state.
+# Test isolation: when AI_VIDEO_FACTORY_TEST_SANDBOX is set (by tests/_guard.py), state
+# persistence is redirected into the sandbox — never the production .factory_state.
 def _state_backup_dir() -> Path:
-    sandbox = os.getenv("NEXUS_TEST_SANDBOX")
-    return Path(sandbox) / ".nexus_state" if sandbox else BASE_DIR / ".nexus_state"
+    sandbox = os.getenv("AI_VIDEO_FACTORY_TEST_SANDBOX")
+    return Path(sandbox) / ".factory_state" if sandbox else config.storage.state_dir
 
 STATE_BACKUP_DIR = _state_backup_dir()
 
 def load_state() -> bool:
     """
     Restores the database state at the beginning of a cloud or local run.
-    In GitHub Actions, workflow downloads artifact 'nexus-db-state' into .nexus_state/
+    In GitHub Actions, workflow downloads artifact 'factory-db-state' into .factory_state/
     """
-    STATE_BACKUP_DIR.mkdir(exist_ok=True)
-    incoming_db = STATE_BACKUP_DIR / "nexus.db"
+    STATE_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    incoming_db = STATE_BACKUP_DIR / "channel.db"
     
     if incoming_db.exists():
         if DB_PATH.exists():
@@ -48,10 +48,13 @@ def save_state() -> Path:
     """
     Prepares the state database for export/upload as an artifact at the end of the run.
     """
-    STATE_BACKUP_DIR.mkdir(exist_ok=True)
-    target_path = STATE_BACKUP_DIR / "nexus.db"
+    STATE_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    target_path = STATE_BACKUP_DIR / "channel.db"
     if DB_PATH.exists():
-        shutil.copy2(DB_PATH, target_path)
+        # Local runs commonly use .factory_state/channel.db as both the live
+        # database and the export location. shutil.copy2 rejects that case.
+        if DB_PATH.resolve() != target_path.resolve():
+            shutil.copy2(DB_PATH, target_path)
         log.info(f"State successfully packaged for persistence at {target_path}")
         return target_path
     else:

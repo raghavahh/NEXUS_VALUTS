@@ -1,5 +1,5 @@
 """
-NEXUS VAULTS 2.0 - Voice Engine (Edge-TTS)
+AI Video Factory - Voice Engine (Edge-TTS)
 Generates high-fidelity Microsoft Neural narration and extracts precise word-level subtitle timings.
 100% Free, zero cloud subscription required.
 """

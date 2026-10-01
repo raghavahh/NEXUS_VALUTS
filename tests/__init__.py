@@ -10,8 +10,8 @@ os.environ["APP_MODE"] = "test"
 
 # Create temporary directories for isolated test run
 temp_dir = Path(tempfile.mkdtemp())
-os.environ["NEXUS_DB_PATH"] = str(temp_dir / "nexus.db")
-os.environ["NEXUS_STATE_DIR"] = str(temp_dir / "nexus_state")
+os.environ["AI_VIDEO_FACTORY_DB_PATH"] = str(temp_dir / "channel.db")
+os.environ["AI_VIDEO_FACTORY_STATE_DIR"] = str(temp_dir / "factory_state")
 os.environ["OUTPUT_DIR"] = str(temp_dir / "output")
 
 # Set synthetic fake credentials (no real keys)

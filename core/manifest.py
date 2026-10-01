@@ -1,5 +1,5 @@
 """
-NEXUS VAULTS 2.0 - Immutable Render Manifest & Traceability Chain
+AI Video Factory - Immutable Render Manifest & Traceability Chain
 Generates and loads render_manifest.json.
 Completely decouples content planning from compositor rendering.
 Every scene has an unbroken chain:

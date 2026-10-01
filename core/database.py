@@ -1,5 +1,5 @@
 """
-NEXUS VAULTS 2.0 - SQLite Database Layer
+AI Video Factory - SQLite Database Layer
 Stores Knowledge Graph topics, published videos, asset provenance, analytics,
 and lightweight content memory. Zero media archiving.
 Database location is driven strictly by config.storage.database_path.
@@ -160,7 +160,7 @@ def init_db():
         log.info(f"Database initialized at {config.storage.database_path.name}")
 
 def get_next_file_number() -> int:
-    """Returns the next sequential NEXUS VAULTS file number (e.g., FILE #001, FILE #002)."""
+    """Returns the next sequential AI Video Factory video number (e.g., VIDEO #001, VIDEO #002)."""
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT MAX(file_number) FROM videos")
@@ -224,7 +224,7 @@ def set_upload_status(file_number: int, upload_status: str):
 def normalize_topic_key(text: str) -> str:
     """Normalizes topic title or key point for robust non-repetition matching."""
     import re
-    clean = re.sub(r'file\s*#?\d+', '', text, flags=re.IGNORECASE)
+    clean = re.sub(r'(file|video)\s*#?\d+', '', text, flags=re.IGNORECASE)
     clean = re.sub(r'#shorts\b', '', clean, flags=re.IGNORECASE)
     clean = re.sub(r'the\s+mystery\s+of\b', '', clean, flags=re.IGNORECASE)
     clean = re.sub(r'[^a-z0-9\s]', ' ', clean.lower())
@@ -340,7 +340,7 @@ def verify_topic_novelty(candidate: dict) -> dict:
                 claim_check = "FAIL"
                 rejection_reasons.append(
                     f"SAME ANGLE: Candidate shares {summary_overlap:.0%} summary + {title_overlap:.0%} title overlap "
-                    f"with FILE #{f_num:03d} ('{row['title'][:35]}'). Different angle required."
+                    f"with VIDEO #{f_num:03d} ('{row['title'][:35]}'). Different angle required."
                 )
 
             # LEVEL 3 detection: Title tokens overlap but summary is genuinely new → ALLOWED

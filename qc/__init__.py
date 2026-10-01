@@ -1,3 +1,3 @@
 """
-NEXUS VAULTS 2.0 - Quality Control and Verification Package
+AI Video Factory - Quality Control and Verification Package
 """

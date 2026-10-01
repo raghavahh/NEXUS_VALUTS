@@ -1,6 +1,6 @@
 """
-NEXUS VAULTS 2.0 - Centralized Configuration Layer
-Single Source of Truth: C:\\YT-SHORTS\\.env
+AI Video Factory 2.0 - Centralized Configuration Layer
+Single Source of Truth: .env
 Loads runtime configuration into typed, immutable configuration objects.
 Strictly masks credentials in logs and diagnostics.
 """
@@ -15,12 +15,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 def load_dotenv():
     """
-    Loads C:\\YT-SHORTS\\.env into os.environ.
+    Loads .env into os.environ.
     Preserves existing environment values if already set (e.g. in CI).
-    TEST FIREWALL: when NEXUS_TEST_SANDBOX is set (tests/_guard.py), the
+    TEST FIREWALL: when AI_VIDEO_FACTORY_TEST_SANDBOX is set (tests/_guard.py), the
     production .env is NEVER loaded — tests run with blanked credentials only.
     """
-    if os.getenv("NEXUS_TEST_SANDBOX"):
+    if os.getenv("AI_VIDEO_FACTORY_TEST_SANDBOX"):
         return
     env_path = BASE_DIR / ".env"
     if env_path.exists():
@@ -74,39 +74,120 @@ class AppConfig:
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
 
 @dataclass(frozen=True)
+class ProviderSlotConfig:
+    """Configuration for a single provider slot (Primary/Backup1/Backup2)."""
+    enabled: bool = True
+    provider: str = ""
+    model: str = ""
+    endpoint: str = ""
+    secret_ref: str = ""
+    timeout: int = 30
+    max_retries: int = 1
+    capabilities: List[str] = field(default_factory=list)
+
+@dataclass(frozen=True)
 class AIConfig:
+    # Text provider chain
     provider_chain: List[str] = field(default_factory=lambda: [
-        p.strip() for p in os.getenv("AI_PROVIDER_CHAIN", "nvidia,groq,gemini,openrouter").split(",") if p.strip()
+        p.strip() for p in os.getenv("AI_TEXT_PROVIDER_CHAIN", "nvidia,groq,gemini,openrouter").split(",") if p.strip()
     ])
     request_timeout: int = int(os.getenv("AI_REQUEST_TIMEOUT", "30"))
     max_retries: int = int(os.getenv("AI_MAX_RETRIES", "1"))
-
-    gemini_api_key: str = _clean_str(os.getenv("GEMINI_API_KEY", ""))
-    gemini_model: str = _clean_str(os.getenv("GEMINI_MODEL", "gemini-3.5-flash"))
-    gemini_api_url: str = os.getenv("GEMINI_API_URL", "https://generativelanguage.googleapis.com/v1beta")
-
-    nvidia_api_key: str = _clean_str(os.getenv("NVIDIA_API_KEY", ""))
-    nvidia_model: str = _clean_str(os.getenv("NVIDIA_MODEL", "nvidia/nemotron-3-super-120b-a12b"))
-    nvidia_api_url: str = os.getenv("NVIDIA_API_URL", "https://integrate.api.nvidia.com/v1")
-
-    groq_api_key: str = _clean_str(os.getenv("GROQ_API_KEY", ""))
-    groq_model: str = _clean_str(os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b"))
-    groq_api_url: str = os.getenv("GROQ_API_URL", "https://api.groq.com/openai/v1")
-
-    openrouter_api_key: str = _clean_str(os.getenv("OPENROUTER_API_KEY", ""))
-    openrouter_model: str = _clean_str(os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3-super-120b-a12b:free"))
-    openrouter_api_url: str = os.getenv("OPENROUTER_API_URL", "https://openrouter.ai/api/v1")
+    
+    # Video provider chain
+    video_provider_chain: List[str] = field(default_factory=lambda: [
+        p.strip() for p in os.getenv("AI_VIDEO_PROVIDER_CHAIN", "runway,pika,luma").split(",") if p.strip()
+    ])
+    video_timeout: int = int(os.getenv("AI_VIDEO_TIMEOUT", "300"))
+    
+    # Individual provider configs (referenced by secret_ref in .env)
+    text_nvidia: ProviderSlotConfig = field(default_factory=lambda: ProviderSlotConfig(
+        enabled=True,
+        provider="nvidia",
+        model=os.getenv("NVIDIA_MODEL", "nvidia/nemotron-3-super-120b-a12b"),
+        endpoint=os.getenv("NVIDIA_API_URL", "https://integrate.api.nvidia.com/v1"),
+        secret_ref="NVIDIA_API_KEY",
+        timeout=int(os.getenv("AI_REQUEST_TIMEOUT", "30")),
+        max_retries=int(os.getenv("AI_MAX_RETRIES", "1")),
+        capabilities=["text"],
+    ))
+    
+    text_groq: ProviderSlotConfig = field(default_factory=lambda: ProviderSlotConfig(
+        enabled=True,
+        provider="groq",
+        model=os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b"),
+        endpoint=os.getenv("GROQ_API_URL", "https://api.groq.com/openai/v1"),
+        secret_ref="GROQ_API_KEY",
+        timeout=int(os.getenv("AI_REQUEST_TIMEOUT", "30")),
+        max_retries=int(os.getenv("AI_MAX_RETRIES", "1")),
+        capabilities=["text"],
+    ))
+    
+    text_gemini: ProviderSlotConfig = field(default_factory=lambda: ProviderSlotConfig(
+        enabled=True,
+        provider="gemini",
+        model=os.getenv("GEMINI_MODEL", "gemini-1.5-flash"),
+        endpoint=os.getenv("GEMINI_API_URL", "https://generativelanguage.googleapis.com/v1beta"),
+        secret_ref="GEMINI_API_KEY",
+        timeout=int(os.getenv("AI_REQUEST_TIMEOUT", "30")),
+        max_retries=int(os.getenv("AI_MAX_RETRIES", "1")),
+        capabilities=["text"],
+    ))
+    
+    text_openrouter: ProviderSlotConfig = field(default_factory=lambda: ProviderSlotConfig(
+        enabled=True,
+        provider="openrouter",
+        model=os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3-super-120b-a12b:free"),
+        endpoint=os.getenv("OPENROUTER_API_URL", "https://openrouter.ai/api/v1"),
+        secret_ref="OPENROUTER_API_KEY",
+        timeout=int(os.getenv("AI_REQUEST_TIMEOUT", "30")),
+        max_retries=int(os.getenv("AI_MAX_RETRIES", "1")),
+        capabilities=["text"],
+    ))
+    
+    video_runway: ProviderSlotConfig = field(default_factory=lambda: ProviderSlotConfig(
+        enabled=True,
+        provider="runway",
+        model=os.getenv("RUNWAY_MODEL", "gen3a_turbo"),
+        endpoint=os.getenv("RUNWAY_API_URL", "https://api.runwayml.com/v1"),
+        secret_ref="RUNWAY_API_KEY",
+        timeout=int(os.getenv("AI_VIDEO_TIMEOUT", "300")),
+        max_retries=int(os.getenv("AI_MAX_RETRIES", "1")),
+        capabilities=["video"],
+    ))
+    
+    video_pika: ProviderSlotConfig = field(default_factory=lambda: ProviderSlotConfig(
+        enabled=True,
+        provider="pika",
+        model=os.getenv("PIKA_MODEL", "pika-1.0"),
+        endpoint=os.getenv("PIKA_API_URL", "https://api.pika.art/v1"),
+        secret_ref="PIKA_API_KEY",
+        timeout=int(os.getenv("AI_VIDEO_TIMEOUT", "300")),
+        max_retries=int(os.getenv("AI_MAX_RETRIES", "1")),
+        capabilities=["video"],
+    ))
+    
+    video_luma: ProviderSlotConfig = field(default_factory=lambda: ProviderSlotConfig(
+        enabled=True,
+        provider="luma",
+        model=os.getenv("LUMA_MODEL", "dream-machine"),
+        endpoint=os.getenv("LUMA_API_URL", "https://api.lumalabs.ai/v1"),
+        secret_ref="LUMA_API_KEY",
+        timeout=int(os.getenv("AI_VIDEO_TIMEOUT", "300")),
+        max_retries=int(os.getenv("AI_MAX_RETRIES", "1")),
+        capabilities=["video"],
+    ))
 
 @dataclass(frozen=True)
 class YouTubeConfig:
     client_id: str = _clean_str(os.getenv("YT_CLIENT_ID", ""))
     client_secret: str = _clean_str(os.getenv("YT_CLIENT_SECRET", ""))
     refresh_token: str = _clean_str(os.getenv("YT_REFRESH_TOKEN", ""))
-    category_id: str = os.getenv("YOUTUBE_CATEGORY_ID", "28")
+    category_id: str = os.getenv("YOUTUBE_CATEGORY_ID", "27")
     default_language: str = os.getenv("YOUTUBE_DEFAULT_LANGUAGE", "en")
     upload_privacy: str = os.getenv("YOUTUBE_UPLOAD_PRIVACY", "private")
-    channel_name: str = "NEXUS VAULTS"
-    handle: str = "@NEXUS_VAULTS"
+    channel_name: str = os.getenv("CHANNEL_NAME", "")
+    handle: str = os.getenv("CHANNEL_HANDLE", "")
     DAILY_QUOTA_LIMIT: int = 10000
     VIDEO_INSERT_COST: int = 1600
 
@@ -119,13 +200,22 @@ class MediaConfig:
         return bool(self.pexels_api_key and self.pexels_api_key.strip())
 
 @dataclass(frozen=True)
+class MediaModeConfig:
+    """Configuration for media generation mode: FFmpeg (procedural) vs AI (generative)."""
+    mode: str = os.getenv("MEDIA_MODE", "ffmpeg")  # "ffmpeg" or "ai"
+    ffmpeg_preset: str = os.getenv("FFMPEG_PRESET", "fast")
+    ai_provider: str = os.getenv("MEDIA_AI_PROVIDER", "runway")
+    ai_model: str = os.getenv("MEDIA_AI_MODEL", "gen3a_turbo")
+    fallback_to_ffmpeg: bool = _parse_bool(os.getenv("MEDIA_FALLBACK_TO_FFMPEG", "true"), True)
+
+@dataclass(frozen=True)
 class ResearchConfig:
     max_topics: int = int(os.getenv("RESEARCH_MAX_TOPICS", "5"))
     max_candidates: int = int(os.getenv("RESEARCH_MAX_CANDIDATES", "3"))
     content_pillars: List[str] = field(default_factory=lambda: [
         p.strip() for p in os.getenv(
             "RESEARCH_CONTENT_PILLARS",
-            "Classified History,Unexplained Events,Scientific Mysteries,Strange Real Events"
+            ""
         ).split(",") if p.strip()
     ])
 
@@ -212,10 +302,11 @@ class QCConfig:
 @dataclass(frozen=True)
 class StorageConfig:
     base_dir: Path = BASE_DIR
-    temp_dir: Path = BASE_DIR / os.getenv("TEMP_DIR", "OUTPUT/temp")
-    output_dir: Path = BASE_DIR / os.getenv("OUTPUT_DIR", "OUTPUT")
-    storyboard_dir: Path = BASE_DIR / os.getenv("STORYBOARD_DIR", "OUTPUT/storyboard")
-    database_path: Path = BASE_DIR / os.getenv("DATABASE_PATH", "nexus.db")
+    state_dir: Path = Path(os.getenv("STATE_DIR", str(BASE_DIR / ".factory_state")))
+    temp_dir: Path = Path(os.getenv("TEMP_DIR", str(BASE_DIR / ".factory_state" / "temp")))
+    output_dir: Path = Path(os.getenv("OUTPUT_DIR", str(BASE_DIR / "OUTPUT")))
+    storyboard_dir: Path = Path(os.getenv("STORYBOARD_DIR", str(BASE_DIR / "OUTPUT" / "storyboard")))
+    database_path: Path = Path(os.getenv("DATABASE_PATH", str(BASE_DIR / ".factory_state" / "channel.db")))
     cleanup_temp: bool = _parse_bool(os.getenv("STORAGE_CLEANUP_TEMP", "true"), True)
     keep_final_output: bool = _parse_bool(os.getenv("STORAGE_KEEP_FINAL_OUTPUT", "true"), True)
 
@@ -261,6 +352,7 @@ class Config:
     ai: AIConfig = field(default_factory=AIConfig)
     youtube: YouTubeConfig = field(default_factory=YouTubeConfig)
     media: MediaConfig = field(default_factory=MediaConfig)
+    media_mode: MediaModeConfig = field(default_factory=MediaModeConfig)
     research: ResearchConfig = field(default_factory=ResearchConfig)
     story: StoryConfig = field(default_factory=StoryConfig)
     hook: HookConfig = field(default_factory=HookConfig)
@@ -279,15 +371,20 @@ class Config:
         """Returns a safe, masked configuration diagnostic."""
         lines = [
             "============================================================",
-            "        NEXUS VAULTS 2.0 - RUNTIME CONFIGURATION AUDIT      ",
+            "        AI Video Factory 2.0 - RUNTIME CONFIGURATION AUDIT      ",
             "============================================================",
             f"APP_ENV:            {self.app.env} (MODE: {self.app.mode})",
+            f"MEDIA_MODE:         {self.media_mode.mode.upper()}",
             f"SCHEDULE_TZ:        {self.schedule.timezone} [UPLOAD: {self.schedule.upload_hour:02d}:{self.schedule.upload_minute:02d} | READY-BY: -{self.schedule.ready_buffer_minutes}m]",
-            f"AI_PROVIDER_CHAIN:  {', '.join(self.ai.provider_chain)}",
-            f"OPENROUTER_KEY:     {_mask_secret(self.ai.openrouter_api_key)} [MODEL: {self.ai.openrouter_model}]",
-            f"GROQ_KEY:           {_mask_secret(self.ai.groq_api_key)} [MODEL: {self.ai.groq_model}]",
-            f"NVIDIA_KEY:         {_mask_secret(self.ai.nvidia_api_key)} [MODEL: {self.ai.nvidia_model}]",
-            f"GEMINI_KEY:         {_mask_secret(self.ai.gemini_api_key)} [MODEL: {self.ai.gemini_model}]",
+            f"AI_TEXT_CHAIN:      {', '.join(self.ai.provider_chain)}",
+            f"AI_VIDEO_CHAIN:     {', '.join(self.ai.video_provider_chain)}",
+            f"NVIDIA_TEXT:        {_mask_secret(os.getenv('NVIDIA_API_KEY'))} [MODEL: {self.ai.text_nvidia.model}]",
+            f"GROQ_TEXT:          {_mask_secret(os.getenv('GROQ_API_KEY'))} [MODEL: {self.ai.text_groq.model}]",
+            f"GEMINI_TEXT:        {_mask_secret(os.getenv('GEMINI_API_KEY'))} [MODEL: {self.ai.text_gemini.model}]",
+            f"OPENROUTER_TEXT:    {_mask_secret(os.getenv('OPENROUTER_API_KEY'))} [MODEL: {self.ai.text_openrouter.model}]",
+            f"RUNWAY_VIDEO:       {_mask_secret(os.getenv('RUNWAY_API_KEY'))} [MODEL: {self.ai.video_runway.model}]",
+            f"PIKA_VIDEO:         {_mask_secret(os.getenv('PIKA_API_KEY'))} [MODEL: {self.ai.video_pika.model}]",
+            f"LUMA_VIDEO:         {_mask_secret(os.getenv('LUMA_API_KEY'))} [MODEL: {self.ai.video_luma.model}]",
             f"YT_CLIENT_ID:       {_mask_secret(self.youtube.client_id)}",
             f"YT_CLIENT_SECRET:   {_mask_secret(self.youtube.client_secret)}",
             f"YT_REFRESH_TOKEN:   {_mask_secret(self.youtube.refresh_token)}",
@@ -306,19 +403,20 @@ class Config:
         self.storage.output_dir.mkdir(parents=True, exist_ok=True)
         self.storage.temp_dir.mkdir(parents=True, exist_ok=True)
         self.storage.storyboard_dir.mkdir(parents=True, exist_ok=True)
+        self.storage.state_dir.mkdir(parents=True, exist_ok=True)
 
-        # Confirm at least one AI provider has an API key
-        has_ai_key = any([
-            self.ai.openrouter_api_key,
-            self.ai.groq_api_key,
-            self.ai.nvidia_api_key,
-            self.ai.gemini_api_key
+        # Confirm at least one AI text provider has an API key
+        has_text_key = any([
+            os.getenv("NVIDIA_API_KEY"),
+            os.getenv("GROQ_API_KEY"),
+            os.getenv("GEMINI_API_KEY"),
+            os.getenv("OPENROUTER_API_KEY"),
         ])
-        if not has_ai_key:
+        if not has_text_key:
             raise ValueError(
-                "CRITICAL: No AI provider API key found in .env! "
-                "Please configure at least one of: OPENROUTER_API_KEY, GROQ_API_KEY, "
-                "NVIDIA_API_KEY, GEMINI_API_KEY."
+                "CRITICAL: No AI text provider API key found in .env! "
+                "Please configure at least one of: NVIDIA_API_KEY, GROQ_API_KEY, "
+                "GEMINI_API_KEY, OPENROUTER_API_KEY."
             )
 
 # Global configuration instance
@@ -381,13 +479,13 @@ class _LegacyChannel:
 
 class _LegacyAIConfig:
     @property
-    def gemini_api_key(self): return config.ai.gemini_api_key
+    def gemini_api_key(self): return os.getenv("GEMINI_API_KEY", "")
     @property
-    def nvidia_api_key(self): return config.ai.nvidia_api_key
+    def nvidia_api_key(self): return os.getenv("NVIDIA_API_KEY", "")
     @property
-    def groq_api_key(self): return config.ai.groq_api_key
+    def groq_api_key(self): return os.getenv("GROQ_API_KEY", "")
     @property
-    def openrouter_api_key(self): return config.ai.openrouter_api_key
+    def openrouter_api_key(self): return os.getenv("OPENROUTER_API_KEY", "")
 
 class _LegacyMediaAPIs:
     @property
@@ -397,3 +495,5 @@ RULES = _LegacyRules()
 CHANNEL = _LegacyChannel()
 AI_CONFIG = _LegacyAIConfig()
 MEDIA_APIS = _LegacyMediaAPIs()
+
+

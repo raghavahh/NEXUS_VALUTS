@@ -29,7 +29,7 @@ def run_audit():
     # Python source files to audit (excluding tests and git)
     py_files = []
     for root, dirs, files in os.walk(BASE_DIR):
-        if any(ignored in root for ignored in [".git", ".nexus_state", "tests", "__pycache__", ".agents"]):
+        if any(ignored in root for ignored in [".git", ".factory_state", "tests", "__pycache__", ".agents"]):
             continue
         for f in files:
             if f.endswith(".py"):

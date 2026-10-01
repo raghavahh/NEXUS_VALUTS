@@ -1,5 +1,5 @@
 """
-NEXUS VAULTS 2.0 - Lightweight Claim Verification Gate
+AI Video Factory - Lightweight Claim Verification Gate
 Sits between script generation and scene planning.
 
 PURPOSE:
@@ -25,6 +25,13 @@ import re
 from typing import List, Dict, Any
 from core.llm_router import route_task, extract_json
 from core.logging import log
+from core.channel_brain import get_channel_brain
+
+
+def _build_claim_verifier_context() -> str:
+    """Build Channel Brain context for claim verification."""
+    brain = get_channel_brain()
+    return brain.get_prompt_context("claim_verification")
 
 CLAIM_VERIFICATION_PROMPT = """\
 You are a factual accuracy auditor for a documentary narration system.
@@ -67,7 +74,7 @@ Rules:
 - PARTIALLY_SUPPORTED without a source_evidence quote is treated as UNSUPPORTED by the pipeline.
 - Do not invent supporting evidence. Quote the nearest relevant passage verbatim.
 - Every sentence must be audited. Do not summarize or aggregate multiple sentences into one object.
-- Ignore the closing channel sign-off signature 'NEXUS VAULTS.' as it is a brand sign-off, not an empirical historical claim.
+- Ignore the closing channel sign-off signature '{channel_signature}.' as it is a brand sign-off, not an empirical historical claim.
 """
 
 
@@ -170,11 +177,14 @@ def verify_script_claims(
         }
 
     # Allow generous article text (8k chars, ~2k tokens, well under Groq 16KB payload limit)
+    # Build Channel Brain context
+    brain = get_channel_brain()
     source_snippet = source_text[:8000].strip()
     prompt = CLAIM_VERIFICATION_PROMPT.format(
         source_text=source_snippet,
         narration=narration.strip(),
-        topic=topic
+        topic=topic,
+        channel_signature=brain.profile.name or "AI Video Factory"
     )
 
     verdicts: List[Dict[str, Any]] = []
@@ -218,7 +228,8 @@ def verify_script_claims(
     filtered_verdicts = []
     for v in verdicts:
         s = v.get("sentence", "").strip()
-        if s.rstrip(".").upper() in ("NEXUS VAULTS", "NEXUS VAULT"):
+        channel_name_upper = (brain.profile.name or "AI Video Factory").upper()
+        if s.rstrip(".").upper() in (channel_name_upper, channel_name_upper.replace(" ", "")):
             continue
         if s.endswith("?") and v.get("verdict") == "UNSUPPORTED":
             # A closing rhetorical question ("What actually happened?", "How was his double life never caught?")
@@ -300,7 +311,7 @@ def fetch_wikipedia_source_text(source_url: str, topic: str) -> str:
     import urllib.parse
     import time
 
-    headers = {"User-Agent": "NEXUS-VAULTS/2.0 (claim-verifier; contact@nexusvaults.org)"}
+    headers = {"User-Agent": "AI-Video-Factory/1.0 (claim-verifier; contact@aivideofactory.org)"}
     raw_title = source_url.split("/wiki/")[-1] if "/wiki/" in source_url else topic
     title = urllib.parse.unquote(raw_title).replace(" ", "_")
 

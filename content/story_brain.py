@@ -1,6 +1,6 @@
 """
-NEXUS VAULTS 2.0 - Retention Documentary Script Engine
-Synthesizes high-retention documentary scripts strictly driven by config.story settings.
+AI Video Factory - Story Brain Engine
+Synthesizes high-retention documentary scripts driven by Channel Brain and config.story settings.
 Zero hardcoded word counts or durations. Aborts cleanly on LLM failure.
 """
 
@@ -10,30 +10,48 @@ from typing import Dict, Any, List
 from core.llm_router import route_task, extract_json
 from core.config import config
 from core.logging import log
+from core.channel_brain import get_channel_brain
+
+
+def _build_story_prompt_context() -> str:
+    """Build Channel Brain context for story generation."""
+    brain = get_channel_brain()
+    return brain.get_prompt_context("story_generation")
 
 SCRIPT_PROMPT_TEMPLATE = """
-You are the Lead Investigative Writer for NEXUS VAULTS.
+You are the Lead Investigative Writer for {channel_name}, a {channel_niche} channel.
+{creative_directive}
+
+{learning_memory}
+
+Channel Profile:
+- Name: {channel_name}
+- Handle: {channel_handle}
+- Niche: {channel_niche}
+- Audience: {channel_audience}
+- Language: {channel_language}
+
 Topic: {topic}
 Verified Facts: {facts}
 Unresolved Conflict: {conflict}
 Chosen Hook: "{hook}"
 
-Write an intense, fast-paced documentary script for a {target_duration}-SECOND YouTube Short.
+Write an intense, fast-paced documentary script for a {target_duration}-SECOND {format_type}.
 STRICT WORD COUNT RULES:
 - THE WORD COUNT MUST BE STRICTLY BETWEEN {min_words} AND {max_words} WORDS.
 - Must start with the exact hook: "{hook}"
 - Ground each beat in real dates, locations, or physical records.
-- End with an unresolved question and the signature "NEXUS VAULTS."
+- End with an unresolved question and the signature "{channel_signature}."
 
 NO FILLER: No "Welcome back", no "Like and subscribe", no "Did you know".
 
 Return raw JSON only (no markdown fences):
-{{
+{
   "narration_script": "Write the complete {target_words}-word spoken narration here starting with the hook without placeholders or ellipsis.",
   "word_count": {target_words},
   "core_anomaly": "{conflict}",
   "unresolved_question": "What actually happened to {topic}?"
-}}
+}
 """
 
 def generate_production_script(
@@ -48,13 +66,19 @@ def generate_production_script(
     When strict_source_grounding=True (called after a Claim Gate failure),
     additional constraints are injected to prevent invented dates, numbers,
     or causal claims not traceable to the provided verified facts.
+    Channel-driven via Channel Brain.
     """
     min_w = config.story.min_words
     max_w = config.story.max_words
     target_d = config.story.target_duration
     target_w = int((min_w + max_w) / 2)
+    
+    # Build Channel Brain context
+    brain = get_channel_brain()
+    format_type = "YouTube Short" if target_d <= 180 else "Long-form Video"
+    channel_signature = brain.profile.name or "AI Video Factory"
 
-    log.info(f"Synthesizing {target_d}s retention script for '{topic}' (Word Target: {min_w}-{max_w})...")
+    log.info(f"Synthesizing {target_d}s retention script for '{topic}' (Word Target: {min_w}-{max_w}) (Channel: {brain.profile.name or 'Unnamed'})...")
     prompt = SCRIPT_PROMPT_TEMPLATE.format(
         topic=topic,
         facts="; ".join(facts),
@@ -63,7 +87,16 @@ def generate_production_script(
         target_duration=target_d,
         min_words=min_w,
         max_words=max_w,
-        target_words=target_w
+        target_words=target_w,
+        channel_name=brain.profile.name or "AI Video Factory",
+        channel_handle=brain.profile.handle or "aivideofactory",
+        channel_niche=brain.profile.niche or "documentary",
+        channel_audience=brain.profile.audience or "general",
+        channel_language=brain.profile.language or "en",
+        creative_directive=brain.creative_directive.directive if brain.creative_directive.directive else "",
+        learning_memory=brain.learning_memory.get_compact_context() if brain.learning_memory.recent_topics else "",
+        format_type=format_type,
+        channel_signature=channel_signature
     )
 
     grounding_suffix = ""
@@ -76,7 +109,7 @@ def generate_production_script(
 
     raw = route_task(
         prompt,
-        system_prompt=f"Senior Documentary Writer. Write complete {min_w}-{max_w} word spoken narration in JSON format. Do not use placeholder phrases.{grounding_suffix}",
+        system_prompt=f"Senior Documentary Writer for {brain.profile.name or 'AI Video Factory'}. Write complete {min_w}-{max_w} word spoken narration in JSON format. Do not use placeholder phrases.{grounding_suffix}",
         task_type="story"
     )
     clean = extract_json(raw)
@@ -109,11 +142,12 @@ def generate_production_script(
         sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', script) if s.strip()]
         pruned = [sentences[0]]  # Hook is mandatory
         curr_words = len(sentences[0].split())
-        closing = "So what actually happened? NEXUS VAULTS."
+        closing = f"So what actually happened? {brain.profile.name or 'AI Video Factory'}."
         closing_words = len(closing.split())
 
         for s in sentences[1:]:
-            if "nexus vaults" in s.lower() or "what actually happened" in s.lower():
+            channel_name_lower = (brain.profile.name or "AI Video Factory").lower()
+            if channel_name_lower in s.lower() or "what actually happened" in s.lower():
                 continue
             sw = len(s.split())
             if curr_words + sw + closing_words <= max_w:
@@ -146,12 +180,13 @@ def generate_production_script(
         if anomaly_text and anomaly_text not in fact_sentence:
             parts.append(anomaly_text)
         parts.append("Official inquiries reached no definitive conclusion.")
-        parts.append("So what actually happened? NEXUS VAULTS.")
+        channel_name_lower = (brain.profile.name or "AI Video Factory").lower()
+        parts.append(f"So what actually happened? {brain.profile.name or 'AI Video Factory'}.")
         
         constructed_script = " ".join(parts)
         constructed_words = constructed_script.split()
         if len(constructed_words) > max_w:
-            constructed_words = constructed_words[:max_w - 5] + ["So", "what", "happened?", "NEXUS", "VAULTS."]
+            constructed_words = constructed_words[:max_w - 5] + ["So", "what", "happened?", brain.profile.name or "AI Video Factory"]
             constructed_script = " ".join(constructed_words)
         script = constructed_script
         words = len(script.split())

@@ -1,5 +1,5 @@
 """
-NEXUS VAULTS 2.0 - Editorial Motion Compositor & Manifest Renderer
+AI Video Factory - Editorial Motion Compositor & Manifest Renderer
 Strict Rules:
 1. Consumes render_manifest.json ONLY. Zero asset selection in compositor.
 2. Asset-Adaptive Motion:
@@ -219,11 +219,11 @@ def build_composite_video_from_manifest(
 
     # 3. Master Burn: Kinetic Subtitles + Archival Dossier Badge
     clean_ass = ass_subtitle_path.resolve().as_posix().replace(":", "\\:")
-    header_text = f"FILE #{file_number:03d} | INVESTIGATION ARCHIVE"
+    header_text = f"VIDEO #{file_number:03d} | INVESTIGATION ARCHIVE"
 
     final_filter = (
         f"[0:v]drawbox=y=0:color=black@0.75:width=iw:height=140:t=fill,"
-        f"drawtext=text='NEXUS VAULTS | {header_text}':fontcolor=white:fontsize=36:"
+        f"drawtext=text='{header_text}':fontcolor=white:fontsize=36:"
         f"x=(w-text_w)/2:y=50:font='Arial Black',"
         f"subtitles='{clean_ass}'[v]"
     )

@@ -1,5 +1,5 @@
 """
-NEXUS VAULTS - Test Isolation Guard (FAIL-CLOSED)
+AI Video Factory - Test Isolation Guard (FAIL-CLOSED)
 
 Every test module MUST import this guard BEFORE importing any project module:
 
@@ -20,7 +20,7 @@ from pathlib import Path
 
 _SANDBOX: Path | None = None
 PROD_REPO = Path(__file__).resolve().parent.parent
-PROD_DB = PROD_REPO / "nexus.db"
+PROD_DB = PROD_REPO / "channel.db"
 
 
 def _prod_fingerprint() -> str | None:
@@ -56,13 +56,13 @@ def ensure_isolation() -> Path:
                 "Import _guard first in every test module."
             )
 
-    _SANDBOX = Path(tempfile.mkdtemp(prefix="nexus_test_sandbox_"))
+    _SANDBOX = Path(tempfile.mkdtemp(prefix="aivf_test_sandbox_"))
     env = {
         "APP_MODE": "test",
         "APP_ENV": "test",
         "TEST_MODE": "true",
         "TEST_SKIP_UPLOAD": "true",
-        "DATABASE_PATH": str(_SANDBOX / "nexus.db"),
+        "DATABASE_PATH": str(_SANDBOX / "channel.db"),
         "OUTPUT_DIR": str(_SANDBOX / "OUTPUT"),
         "TEMP_DIR": str(_SANDBOX / "OUTPUT" / "temp"),
         "STORYBOARD_DIR": str(_SANDBOX / "OUTPUT" / "storyboard"),
@@ -70,8 +70,8 @@ def ensure_isolation() -> Path:
         "GEMINI_API_KEY": "", "GROQ_API_KEY": "", "NVIDIA_API_KEY": "",
         "OPENROUTER_API_KEY": "", "PEXELS_API_KEY": "",
         "YT_CLIENT_ID": "", "YT_CLIENT_SECRET": "", "YT_REFRESH_TOKEN": "",
-        # Detach state persistence from the production .nexus_state
-        "NEXUS_TEST_SANDBOX": str(_SANDBOX),
+        # Detach state persistence from the production .factory_state
+        "AI_VIDEO_FACTORY_TEST_SANDBOX": str(_SANDBOX),
     }
     os.environ.update(env)
     (_SANDBOX / "OUTPUT" / "temp").mkdir(parents=True, exist_ok=True)

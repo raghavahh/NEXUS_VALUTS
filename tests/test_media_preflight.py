@@ -1,5 +1,5 @@
 """
-NEXUS VAULTS - Media Preflight, Selector Invariant, and Hook Grounding Unit Tests (ISOLATED)
+AI Video Factory - Media Preflight, Selector Invariant, and Hook Grounding Unit Tests (ISOLATED)
 Tests the critical architectural contracts introduced after Run #7:
 1. Media preflight boundary conditions:
    - < 4 relevant assets -> REJECT

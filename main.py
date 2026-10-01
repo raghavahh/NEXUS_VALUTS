@@ -1,10 +1,9 @@
 """
-NEXUS VAULTS 2.0 - Master Documentary Pipeline Orchestrator
-Final 10/10 Documentary Masterpiece Engine.
+AI Video Factory - Master Documentary Pipeline Orchestrator
+Autonomous documentary production engine.
 Strict Claim-Level Visual Intent, 5-Tier Deduplication, Render Manifest,
 3-Layer Verification + Black/Freeze Detection, EBU R128 Audio Mastering,
 Crash-Safe Upload Idempotency, Single-Flight Production Lock.
-Single Source of Truth: C:\\YT-SHORTS\\.env
 """
 
 import sys
@@ -24,6 +23,7 @@ from core.database import (
 )
 from core.scheduler import get_production_clock, get_schedule_window, evaluate_readiness_guarantee
 from core.state_store import load_state, save_state
+from core.channel_brain import save_channel_brain
 from core.manifest import generate_render_manifest, load_render_manifest
 from research.discover import discover_candidates, fetch_wikipedia_summary
 from research.growth_brain import produce_growth_brain
@@ -51,9 +51,9 @@ LOCK_STALE_HOURS = 6  # a lock older than this is considered abandoned
 
 def acquire_production_lock():
     """Returns (acquired: bool, lock_path). Uses atomic O_CREAT|O_EXCL creation."""
-    # Honors NEXUS_TEST_SANDBOX so isolated tests never touch production lock state.
-    state_root = os.getenv("NEXUS_TEST_SANDBOX") or str(config.storage.base_dir)
-    lock_dir = Path(state_root) / ".nexus_state"
+    # Honors AIVF_TEST_SANDBOX so isolated tests never touch production lock state.
+    state_root = os.getenv("AI_VIDEO_FACTORY_TEST_SANDBOX") or str(config.storage.base_dir)
+    lock_dir = Path(state_root) / ".factory_state"
     lock_dir.mkdir(exist_ok=True)
     lock_path = lock_dir / "production.lock"
     if lock_path.exists():
@@ -123,11 +123,12 @@ def run_pipeline(dry_run: bool = False, skip_upload: bool = False, force_topic: 
         _run_pipeline(dry_run=dry_run, skip_upload=skip_upload, force_topic=force_topic)
     finally:
         release_production_lock(lock_path)
+        save_channel_brain()
         save_state()
 
 def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, force_topic: str = None):
     log.info("==========================================================")
-    log.info("   NEXUS VAULTS 2.0 - 10/10 MASTER DOCUMENTARY ENGINE    ")
+    log.info("        AI Video Factory - Documentary Engine             ")
     log.info("==========================================================")
 
     # 0. Validate Configuration & Security Audit
@@ -143,7 +144,7 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, force_topic:
     if incomplete_uploads:
         for row in incomplete_uploads:
             log.error(
-                f"  FILE #{row['file_number']:03d} ('{row['title'][:50]}') status=UPLOAD_ATTEMPTED, no confirmed YouTube ID."
+                f"  VIDEO #{row['file_number']:03d} ('{row['title'][:50]}') status=UPLOAD_ATTEMPTED, no confirmed YouTube ID."
             )
         log.error(
             "[IDEMPOTENCY GUARD: RUN DEFERRED] A previous upload attempt has an UNKNOWN outcome. "
@@ -154,8 +155,8 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, force_topic:
         return
 
     file_number = get_next_file_number()
-    file_prefix = f"FILE_{file_number:03d}"
-    log.info(f"Opening Archive Dossier: {file_prefix}")
+    file_prefix = f"VIDEO_{file_number:03d}"
+    log.info(f"Opening Production Run: {file_prefix}")
 
     # 2. Live Channel Analytics & Self-Learning Feedback Loop
     # Reads analytics from PREVIOUSLY PUBLISHED videos only (publishAt already passed).
@@ -349,7 +350,7 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, force_topic:
     manifest_data = load_render_manifest(manifest_path)
 
     # 13. Editorial Motion Compositor (Consumes Manifest ONLY)
-    output_video = config.storage.output_dir / f"{file_prefix}_nexus_short.mp4"
+    output_video = config.storage.output_dir / f"{file_prefix}_aivf_short.mp4"
     build_composite_video_from_manifest(
         manifest_data=manifest_data,
         mixed_audio_path=mixed_audio_path,
@@ -450,12 +451,12 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, force_topic:
 
     if existing_upload_id:
         youtube_id = existing_upload_id
-        log.warning(f"[DUPLICATE UPLOAD PREVENTED] FILE #{file_number:03d} already uploaded: https://youtube.com/shorts/{youtube_id} (Status: {upload_status})")
+        log.warning(f"[DUPLICATE UPLOAD PREVENTED] VIDEO #{file_number:03d} already uploaded: https://youtube.com/shorts/{youtube_id} (Status: {upload_status})")
     elif (not skip_upload) and (config.app.mode == "production"):
         # Production upload gate: governed solely by APP_MODE, not test flags
         if ready_for_upload:
             log.info("----------- PRE-UPLOAD VERIFICATION -----------")
-            log.info(f"  FILE NUMBER:     FILE #{file_number:03d}")
+            log.info(f"  VIDEO NUMBER:     VIDEO #{file_number:03d}")
             log.info(f"  TOPIC:           {topic_name}")
             log.info(f"  NOVELTY:         {novelty_audit['result']}")
             
@@ -466,7 +467,7 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, force_topic:
             log.info(f"  READINESS:       {ready_reason}")
             log.info(f"  PUBLISH AT:      {target_publish_iso} (privacyStatus=private)")
             log.info("------------------------------------------------")
-            log.info(f"Initiating Scheduled Upload for FILE #{file_number:03d} (Scheduled for: {sched_info['target_upload_time_us']})...")
+            log.info(f"Initiating Scheduled Upload for VIDEO #{file_number:03d} (Scheduled for: {sched_info['target_upload_time_us']})...")
             # Write-ahead: mark attempt BEFORE the network call
             mark_upload_attempted(file_number)
             upload_res = upload_short_to_youtube(
@@ -486,7 +487,7 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, force_topic:
                 upload_status = "DEFERRED_UPLOAD_FAILED"
                 set_upload_status(file_number, upload_status)
                 log.error(
-                    f"[UPLOAD FAILED: DEFERRED] FILE #{file_number:03d} upload did not complete. "
+                    f"[UPLOAD FAILED: DEFERRED] VIDEO #{file_number:03d} upload did not complete. "
                     f"No automatic retry (avoids duplicate risk). Master preserved at: {output_video}"
                 )
         else:
@@ -515,7 +516,7 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, force_topic:
 
     for s in scenes_with_assets:
         meta = s["asset_meta"]
-        # canonical_url is the stable identity (nexus-generated:// for graphics,
+        # canonical_url is the stable identity (aivf-generated:// for graphics,
         # the remote clean URL for harvested assets) — a temp file:// path would
         # dangle after cleanup.
         stable_source = meta.get("canonical_url") or meta.get("url")
@@ -552,7 +553,7 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, force_topic:
     ready_by_str = sched_info["ready_by_deadline_us"].strftime("%Y-%m-%d %H:%M:%S %Z")
     upload_str = sched_info["target_upload_time_us"].strftime("%Y-%m-%d %H:%M:%S %Z")
     actual_comp_str = completion_time_us.strftime("%Y-%m-%d %H:%M:%S %Z")
-    gen_graphic_count = sum(1 for s in scenes_with_assets if s.get("asset_meta", {}).get("visual_type") == "GENERATED_GRAPHIC" or s.get("asset_meta", {}).get("source") == "NEXUS_GENERATED")
+    gen_graphic_count = sum(1 for s in scenes_with_assets if s.get("asset_meta", {}).get("visual_type") == "GENERATED_GRAPHIC" or s.get("asset_meta", {}).get("source") == "AI_GENERATED")
     comp_analysis = growth_brain.get("competitor_analysis", {}) if isinstance(growth_brain, dict) else {}
     competitor_sampled = comp_analysis.get("sampled_count", 0) if isinstance(comp_analysis, dict) else 0
     n_scenes = len(scenes_with_assets)
@@ -561,9 +562,9 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, force_topic:
     lufs_str = f"{measured_lufs:.1f} LUFS" if measured_lufs is not None else "NOT MEASURED"
 
     print("\n" + "="*65)
-    print(f"       NEXUS VAULTS 2.0 - PRODUCTION REPORT: FILE #{file_number:03d}")
+    print(f"       AI Video Factory - PRODUCTION REPORT: VIDEO #{file_number:03d}")
     print("="*65)
-    print(f"FILE ID:                 FILE #{file_number:03d}")
+    print(f"VIDEO ID:                VIDEO #{file_number:03d}")
     print(f"TOPIC:                   {topic_name}")
     print(f"TITLE:                   {seo_data['title']}")
     print(f"MAIN KEY POINT:          {facts[0] if facts else topic_name}")
@@ -604,7 +605,7 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, force_topic:
     print("="*65 + "\n")
 
 def main():
-    parser = argparse.ArgumentParser(description="NEXUS VAULTS 2.0 Autonomous Engine")
+    parser = argparse.ArgumentParser(description="AI Video Factory Autonomous Engine")
     parser.add_argument("--dry-run", action="store_true", default=False, help="Research and storyboard planning only — no render, no upload, no archive side effects")
     parser.add_argument("--skip-upload", action="store_true", default=False,
                         help="Render video but skip YouTube upload. For local test renders only. "

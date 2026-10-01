@@ -1,5 +1,5 @@
 """
-NEXUS VAULTS 2.0 - Per-Scene Asset Harvester & Semantic Relevance Gate
+AI Video Factory - Per-Scene Asset Harvester & Semantic Relevance Gate
 Implements:
 1. Exact Subject Harvesting: Queries centered strictly on primary_visual_subject.
 2. Hard Relevance Gate: Strict rejection of assets with score < config.scene.relevance_min_score.
@@ -26,7 +26,7 @@ from media.explanatory_graphic import create_truthful_explanatory_graphic
 
 COMMONS_API = "https://commons.wikimedia.org/w/api.php"
 WIKI_API = "https://en.wikipedia.org/w/api.php"
-HEADERS = {"User-Agent": "NexusVaultsEngine/2.0 (media provenance auditor; contact@nexusvaults.org)"}
+HEADERS = {"User-Agent": "AI-Video-Factory/1.0 (media provenance auditor; contact@aivideofactory.org)"}
 
 class VisualBudgetExceededError(Exception):
     """Raised when generated graphics exceed the allowed budget or authentic assets are below threshold."""
@@ -166,7 +166,7 @@ def search_pexels(query: str, limit: int = 3) -> List[Dict[str, Any]]:
 
     results = []
     try:
-        req = urllib.request.Request(url, headers={"Authorization": api_key, "User-Agent": "NexusVaultsEngine/2.0"})
+        req = urllib.request.Request(url, headers={"Authorization": api_key, "User-Agent": "AI-Video-Factory/1.0"})
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode("utf-8"))
             for photo in data.get("photos", []):
@@ -657,7 +657,7 @@ def collect_storyboard_assets(
     # Enforce generated graphics budget and minimum authentic assets.
     generated_count = sum(
         1 for s in collected_scenes
-        if s.get("asset_meta", {}).get("source") == "NEXUS_GENERATED" or s.get("asset_meta", {}).get("visual_type") == "GENERATED_GRAPHIC"
+        if s.get("asset_meta", {}).get("source") == "AI_GENERATED" or s.get("asset_meta", {}).get("visual_type") == "GENERATED_GRAPHIC"
     )
     authentic_count = len(collected_scenes) - generated_count
 
@@ -683,7 +683,7 @@ def format_relevance_report(scenes_with_assets: List[Dict[str, Any]]) -> str:
     """
     lines = [
         "=" * 65,
-        "         NEXUS VAULTS 2.0 - SCENE VISUAL RELEVANCE AUDIT REPORT",
+        "         AI Video Factory - SCENE VISUAL RELEVANCE AUDIT REPORT",
         "=" * 65
     ]
     min_relevance = config.scene.relevance_min_score

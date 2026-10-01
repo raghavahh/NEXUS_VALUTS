@@ -1,8 +1,8 @@
 """
-NEXUS VAULTS 2.0 - The God Hook Engine
+AI Video Factory - Hook Engine
 Generates candidate hooks across curiosity categories.
 Scored and selected via config.hook parameters.
-Zero fake fallback content: clean abortion if all AI providers fail.
+Channel-driven via Channel Brain. Zero fake fallback content.
 """
 
 import json
@@ -12,6 +12,7 @@ from core.llm_router import route_task, extract_json
 from core.database import get_weight
 from core.config import config
 from core.logging import log
+from core.channel_brain import get_channel_brain
 
 
 HOOK_CATEGORIES = [
@@ -22,8 +23,24 @@ HOOK_CATEGORIES = [
     "LOCATION"
 ]
 
+def _build_hook_prompt_context() -> str:
+    """Build Channel Brain context for hook generation."""
+    brain = get_channel_brain()
+    return brain.get_prompt_context("hooks")
+
 HOOK_PROMPT_TEMPLATE = """
-You are the master retention critic for NEXUS VAULTS.
+You are the master retention critic for {channel_name}, a {channel_niche} channel.
+{creative_directive}
+
+{learning_memory}
+
+Channel Profile:
+- Name: {channel_name}
+- Handle: {channel_handle}
+- Niche: {channel_niche}
+- Audience: {channel_audience}
+- Language: {channel_language}
+
 Topic: {topic}
 Verified Facts: {facts}
 Core Anomaly: {conflict}
@@ -43,17 +60,21 @@ STRICT FACTUAL GROUNDING RULES:
 5. Keep each hook under 16 words. Punchy, authentic, and cinematic.
 
 Return raw JSON only (no markdown fences):
-{{
+{
   "candidate_hooks": [
-    {{"category": "CONTRADICTION", "hook": "..."}}
+    {"category": "CONTRADICTION", "hook": "..."}
   ]
-}}
+}
 """
 
 def generate_and_score_hooks(topic: str, facts: List[str], conflict: str, source_context: str = "") -> Dict[str, Any]:
     """Generates candidate hooks, scores them, and selects the winning hook."""
     count = config.hook.candidate_count
-    log.info(f"Generating {count} candidate hooks for: '{topic}'")
+    
+    # Build Channel Brain context
+    brain = get_channel_brain()
+    
+    log.info(f"Generating {count} candidate hooks for: '{topic}' (Channel: {brain.profile.name or 'Unnamed'})")
     facts_str = "; ".join(facts)
     if source_context:
         facts_str += f"\nDocumented Source Excerpt: {source_context[:1200].strip()}"
@@ -61,10 +82,17 @@ def generate_and_score_hooks(topic: str, facts: List[str], conflict: str, source
         topic=topic,
         facts=facts_str,
         conflict=conflict,
-        count=count
+        count=count,
+        channel_name=brain.profile.name or "AI Video Factory",
+        channel_handle=brain.profile.handle or "aivideofactory",
+        channel_niche=brain.profile.niche or "documentary",
+        channel_audience=brain.profile.audience or "general",
+        channel_language=brain.profile.language or "en",
+        creative_directive=brain.creative_directive.directive if brain.creative_directive.directive else "",
+        learning_memory=brain.learning_memory.get_compact_context() if brain.learning_memory.recent_topics else ""
     )
 
-    raw = route_task(prompt, system_prompt="Critic & Hook Architect. Raw JSON only.", task_type="hook")
+    raw = route_task(prompt, system_prompt=f"Critic & Hook Architect for {brain.profile.name or 'AI Video Factory'}. Raw JSON only.", task_type="hook")
     clean = extract_json(raw)
 
     candidates = []

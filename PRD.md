@@ -1,13 +1,13 @@
-# NEXUS VAULTS 2.0 — AUTHORITATIVE PRODUCT REQUIREMENTS DOCUMENT (PRD)
+# AI Video Factory — AUTHORITATIVE PRODUCT REQUIREMENTS DOCUMENT (PRD)
 ### Autonomous YouTube Shorts Documentary Engine · Production Release v2.0
-**Channel:** @NEXUS_VAULTS · **Format:** 1080×1920 Vertical, 30–40s Documentary Shorts  
+**Channel:** Configured via CHANNEL_HANDLE · **Format:** 1080×1920 Vertical, 30–40s Documentary Shorts  
 **Sole Authoritative Technical & Operational Reference**
 
 ---
 
 ## 1. PRODUCT VISION & IDENTITY CONTRACT
 
-NEXUS VAULTS 2.0 is a **genuinely autonomous, zero-human-intervention documentary production system**. Running on automated cloud schedules, it executes the entire lifecycle of investigative historical and scientific shorts:
+AI Video Factory is a documentary production system that can execute the full lifecycle without interactive steps once configured. Runs are explicitly started by a user locally or through the manual GitHub Actions workflow:
 1. **Discovers** verifiable, declassified, or anomalous historical/scientific subjects from Wikipedia.
 2. **Audits Topic Novelty** across a 3-level persistent registry to eliminate duplicate or same-angle content.
 3. **Formulates Retention-Engineered Scripts** (68–84 words, 36.0s target duration) featuring claim-local evidence.
@@ -65,12 +65,12 @@ main.py → acquire_production_lock()
 ## 3. SYSTEM CONTRACTS (NON-NEGOTIABLE ARCHITECTURE)
 
 ### S1: Channel Identity & Output Specifications
-- **Channel Name:** NEXUS VAULTS | **Handle:** @NEXUS_VAULTS
+- **Channel Name:** Configured via CHANNEL_NAME | **Handle:** Configured via CHANNEL_HANDLE
 - **Video Dimensions:** 1080 × 1920 (Vertical 9:16 portrait)
 - **Target Frame Rate:** 30 fps (libx264, preset fast, CRF 20)
 - **Target Audio:** AAC @ 192 kbps, mastered to -14.0 LUFS (±1.0 LUFS tolerance, peak -1.5 dBFS)
-- **Sequential File Registry:** Sequential, zero-padded `FILE #001`, `FILE #002`... Never reset or rolled back.
-- **Canonical Database:** `nexus.db` (local working tree) synchronized with `.nexus_state/nexus.db` (git-backed persistence).
+- **Sequential Video Registry:** Sequential, zero-padded `VIDEO #001`, `VIDEO #002`... Never reset or rolled back.
+- **Canonical Database:** `channel.db` (local working tree) synchronized with `.factory_state/channel.db` (git-backed persistence).
 
 ### S2: Production Scheduling & Readiness Guarantee
 - **Target Upload Window:** Next day at 19:00 America/New_York (US Eastern Time).
@@ -109,7 +109,7 @@ NVIDIA NIM → Groq → Gemini → OpenRouter
 
 ### S6: Visual Truth & Media Harvesting Rules
 - **Minimum Authentic Archival Assets:** ≥ 4 authentic historical images per Short.
-- **Maximum Procedural Graphics:** ≤ 3 generated graphics per Short (`source: NEXUS_GENERATED`).
+- **Maximum Procedural Graphics:** ≤ 3 generated graphics per Short (`source: AIVF_GENERATED`).
 - **Pexels Stock Footage Restrictions:** Pexels is barred from all primary evidence, person identification, or document slots (`SHOW_PRIMARY_EVIDENCE`, `IDENTIFY_PERSON`, `EXPLAIN_MECHANISM`, etc.). Pexels is permitted exclusively for `ATMOSPHERIC` or contextual establishers.
 - **Anti-Hallucination Graphic Rule:** Generated schematics may display only confirmed dates, coordinates, and labels derived directly from verified source claims.
 
@@ -136,9 +136,9 @@ Within a Short and across historical registry:
 - **Resumable Chunked Upload:** Uploads proceed in 5 MB chunks with `Content-Range` headers and HTTP 308 resume range handling. No full-file buffering in memory.
 
 ### S10: State Synchronization & Lifecycle
-- Root database `nexus.db` and cloud backup `.nexus_state/nexus.db` synchronize on every run based on file modification timestamp.
+- Root database `channel.db` and cloud backup `.factory_state/channel.db` synchronize on every run based on file modification timestamp.
 - On completion or failure, temporary scene clips and raw recordings are pruned while broadcast masters and contact sheets are preserved.
-- Production lock (`.nexus_state/production.lock`) prevents concurrent runs; stale locks (> 6 hours) automatically recover.
+- Production lock (`.factory_state/production.lock`) prevents concurrent runs; stale locks (> 6 hours) automatically recover.
 
 ---
 
@@ -269,7 +269,7 @@ c:\YT-SHORTS\
 │   ├── test_preflight.py      # Pre-run environment & credentials validation
 │   └── test_regression.py     # Full FFmpeg compositor & visual QC golden test
 ├── .github/workflows/         # Cloud automation workflows
-│   └── daily_nexus.yml        # Scheduled production & review run workflow
+│   └── daily_aivf.yml         # Manual production & review run workflow
 ├── main.py                    # Master production orchestrator
 ├── PRD.md                     # Single authoritative specification
 ├── README.md                  # Operational guide & system overview
@@ -289,4 +289,4 @@ c:\YT-SHORTS\
 
 ---
 
-*NEXUS VAULTS 2.0 Authoritative PRD · Consolidated Single Source of Truth · Confirmed September 20, 2026*
+*AI Video Factory Authoritative PRD · Consolidated Single Source of Truth · Confirmed September 20, 2026*

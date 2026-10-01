@@ -1,30 +1,22 @@
-name: NEXUS Daily
+name: AI Video Factory Manual Run
 
-# Runs at 00:00 America/New_York year-round.
-# GitHub cron is UTC only, so we fire at BOTH possible UTC times and a gate
-# step lets exactly one of them through (the one where New York time is hour 0).
+# Deliberately manual-only. Start this workflow from the GitHub Actions tab.
 on:
-  schedule:
-    - cron: "0 4 * * *"   # = 00:00 during EDT (UTC-4)
-    
   workflow_dispatch:
     inputs:
-      force_run:
-        description: "Skip the midnight-ET gate (manual test / immediate execution)"
-        type: boolean
-        default: true
       force_topic:
         description: "Optional forced topic name (e.g. 'Mary Celeste')"
         type: string
         default: ""
+        required: false
 
 # Only one production run at a time; never cancel a run that is mid-upload.
 concurrency:
-  group: nexus-production
+  group: aivf-production
   cancel-in-progress: false
 
 permissions:
-  contents: write   # needed to save state to the nexus-state branch
+  contents: write   # needed to save state to the factory-state branch
   actions: read     # needed for workflow run metadata
 
 jobs:
@@ -51,11 +43,14 @@ jobs:
       APP_MODE: production
       SCHEDULE_TIMEZONE: America/New_York
       SCHEDULE_TZ: America/New_York
+      CHANNEL_NAME: NEXUS VAULTS
+      CHANNEL_HANDLE: NEXUS_VAULTS
+      CHANNEL_NICHE: ${{ vars.CHANNEL_NICHE || 'history' }}
       PYTHONUNBUFFERED: "1"
       PYTHONIOENCODING: "utf-8"
 
       # ---- AI Routing & Explicit Stable Model Architecture ----
-      AI_PROVIDER_CHAIN: nvidia,groq,gemini,openrouter
+      AI_TEXT_PROVIDER_CHAIN: nvidia,groq,gemini,openrouter
       NVIDIA_MODEL: nvidia/nemotron-3-super-120b-a12b
       GROQ_MODEL: qwen/qwen3.8-27b
       GEMINI_MODEL: gemini-3.5-flash
@@ -69,48 +64,29 @@ jobs:
       QC_REQUIRE_FRAME_VERIFICATION: "true"
 
       # ---- Review Mode vs Live Mode ----
-      # In review mode (NEXUS_LIVE not "true"), preserve rendered media artifacts.
-      TEST_KEEP_ARTIFACTS: ${{ vars.NEXUS_LIVE == 'true' && 'false' || 'true' }}
+      # In review mode (AI_VIDEO_FACTORY_LIVE not "true"), preserve rendered media artifacts.
+      TEST_KEEP_ARTIFACTS: ${{ vars.AI_VIDEO_FACTORY_LIVE == 'true' && 'false' || 'true' }}
 
     steps:
-      - name: Midnight-ET gate
-        id: gate
-        run: |
-          $tz = [System.TimeZoneInfo]::FindSystemTimeZoneById('Eastern Standard Time')
-          $et = [System.TimeZoneInfo]::ConvertTimeFromUtc([DateTime]::UtcNow, $tz)
-          Write-Host "New York time now: $($et.ToString('yyyy-MM-dd HH:mm:ss'))"
-          $manual = ('${{ github.event_name }}' -eq 'workflow_dispatch') -and ('${{ inputs.force_run }}' -eq 'true')
-          if ($manual -or $et.Hour -eq 0) {
-            Write-Host "Midnight-ET gate passed. Proceeding with execution."
-            Add-Content -Path $env:GITHUB_OUTPUT -Value "go=true" -Encoding utf8
-          } else {
-            Write-Host "Not the midnight-ET window (current hour: $($et.Hour)). Exiting cleanly."
-            Add-Content -Path $env:GITHUB_OUTPUT -Value "go=false" -Encoding utf8
-          }
-
       - name: Checkout code
-        if: steps.gate.outputs.go == 'true'
         uses: actions/checkout@v4
 
       - name: Checkout state branch
-        if: steps.gate.outputs.go == 'true'
         id: state_checkout
         continue-on-error: true
         uses: actions/checkout@v4
         with:
-          ref: nexus-state
+          ref: factory-state
           path: state
           fetch-depth: 1
 
       - name: Set up Python
-        if: steps.gate.outputs.go == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
 
       - name: Install dependencies & FFmpeg
-        if: steps.gate.outputs.go == 'true'
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
@@ -124,23 +100,27 @@ jobs:
           ffmpeg -version | Select-Object -First 1
 
       - name: Restore state
-        if: steps.gate.outputs.go == 'true'
         run: |
-          New-Item -ItemType Directory -Force .nexus_state | Out-Null
-          if (Test-Path state/nexus.db) {
-            Copy-Item state/nexus.db .nexus_state/nexus.db -Force
-            Write-Host "State restored from nexus-state branch."
-          } elseif (Test-Path .nexus_state/nexus.db) {
+          New-Item -ItemType Directory -Force .factory_state | Out-Null
+          if (Test-Path state/channel.db) {
+            Copy-Item state/channel.db .factory_state/channel.db -Force
+            Write-Host "State restored from factory-state branch."
+          } elseif (Test-Path .factory_state/channel.db) {
             Write-Host "Using seeded state from repository."
           } else {
-            Write-Warning "No existing nexus.db found. Engine will initialize fresh database with File #001 preservation."
+            Write-Warning "No existing channel.db found. Engine will initialize fresh database with Video #001 preservation."
+          }
+          if (Test-Path state/channel_brain.json) {
+            Copy-Item state/channel_brain.json .factory_state/channel_brain.json -Force
+            Write-Host "Channel Brain restored from factory-state branch."
           }
 
-      - name: Run NEXUS
-        if: steps.gate.outputs.go == 'true'
+      - name: Run AI Video Factory
+        env:
+          FORCE_TOPIC: ${{ inputs.force_topic }}
         run: |
-          $live = '${{ vars.NEXUS_LIVE }}' -eq 'true'
-          $forcedTopic = '${{ inputs.force_topic }}'.Trim()
+          $live = '${{ vars.AI_VIDEO_FACTORY_LIVE }}' -eq 'true'
+          $forcedTopic = $env:FORCE_TOPIC.Trim()
           $topicArgs = if ($forcedTopic) { @("--force-topic", $forcedTopic) } else { @() }
 
           if ($live) {
@@ -151,61 +131,71 @@ jobs:
           } else {
             Write-Host "=========================================================="
             Write-Host "🔍 REVIEW MODE: Rendering short, NO live YouTube upload"
-            Write-Host "   Set repository variable NEXUS_LIVE=true when ready"
+            Write-Host "   Set repository variable AI_VIDEO_FACTORY_LIVE=true when ready"
             Write-Host "=========================================================="
             python main.py --skip-upload @topicArgs
           }
 
       # Review mode or failure: upload rendered video and intermediate assets
       - name: Upload rendered video artifact
-        if: always() && steps.gate.outputs.go == 'true' && vars.NEXUS_LIVE != 'true'
+        if: always() && vars.AI_VIDEO_FACTORY_LIVE != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: nexus-rendered-short
+          name: aivf-rendered-short
           path: |
             OUTPUT/*.mp4
             OUTPUT/storyboard/*.jpg
-            OUTPUT/temp/**/render_manifest.json
+            .factory_state/temp/**/render_manifest.json
           if-no-files-found: ignore
           retention-days: 7
 
       # Always backup database state as an artifact for instant disaster recovery
       - name: Backup database artifact
-        if: always() && steps.gate.outputs.go == 'true'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: nexus-database-state
-          path: .nexus_state/nexus.db
+          name: aivf-database-state
+          path: |
+            .factory_state/channel.db
+            .factory_state/channel_brain.json
           if-no-files-found: ignore
           retention-days: 14
 
-      # Live mode: persist state to the nexus-state git branch
-      - name: Save state to nexus-state branch
-        if: always() && steps.gate.outputs.go == 'true' && vars.NEXUS_LIVE == 'true'
+      # Live mode: persist state to the factory-state git branch
+      - name: Save state to factory-state branch
+        if: always() && vars.AI_VIDEO_FACTORY_LIVE == 'true'
         run: |
-          if (Test-Path .nexus_state/nexus.db) {
+          if ((Test-Path .factory_state/channel.db) -or (Test-Path .factory_state/channel_brain.json)) {
             if (-not (Test-Path state/.git)) {
               New-Item -ItemType Directory -Force state | Out-Null
               Push-Location state
               git init
               git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
-              git checkout -b nexus-state
+              git checkout -b factory-state
             } else {
               Push-Location state
             }
-            Copy-Item ../.nexus_state/nexus.db ./nexus.db -Force
+            if (Test-Path ../.factory_state/channel.db) {
+              Copy-Item ../.factory_state/channel.db ./channel.db -Force
+            }
+            if (Test-Path ../.factory_state/channel_brain.json) {
+              Copy-Item ../.factory_state/channel_brain.json ./channel_brain.json -Force
+            }
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add nexus.db
+            git add channel.db
+            if (Test-Path channel_brain.json) {
+              git add channel_brain.json
+            }
             git diff --cached --quiet
             if ($LASTEXITCODE -ne 0) {
               git commit -m "state update: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
-              git push origin HEAD:nexus-state --force
-              Write-Host "State successfully saved and pushed to nexus-state branch."
+              git push origin HEAD:factory-state
+              Write-Host "State successfully saved and pushed to factory-state branch."
             } else {
               Write-Host "State unchanged; no commit needed."
             }
             Pop-Location
           } else {
-            Write-Warning "No .nexus_state/nexus.db found; nothing to save."
+            Write-Warning "No .factory_state/channel.db found; nothing to save."
           }
