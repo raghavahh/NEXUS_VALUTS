@@ -1,15 +1,14 @@
 """
 AI Video Factory - Explicit State Machine
-Enforces allowed/forbidden transitions. Every run is a state machine instance.
+Enforces ALLOWED transitions only (whitelist). Anything not explicitly allowed = hard failure.
 """
 
 from enum import Enum
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List, Set
 from pathlib import Path
 import json
-import os
 from core.config import config
 from core.logging import log
 
@@ -60,28 +59,43 @@ class RunState(Enum):
     RUN_FAILED = "RUN_FAILED"
 
 
-# Forbidden transitions - these MUST be blocked in code
-FORBIDDEN_TRANSITIONS: Dict[RunState, Set[RunState]] = {
-    RunState.QC1: {RunState.QC2, RunState.FINAL_VERIFY, RunState.READY_TO_PUBLISH, RunState.UPLOADING},
-    RunState.QC1_FAILED: {RunState.QC2, RunState.FINAL_VERIFY, RunState.READY_TO_PUBLISH, RunState.UPLOADING},
-    RunState.QC2: {RunState.PUBLISHED, RunState.UPLOADING},
-    RunState.QC2_FAILED: {RunState.FINAL_VERIFY, RunState.READY_TO_PUBLISH, RunState.UPLOADING, RunState.PUBLISHED},
-    RunState.FINAL_VERIFY: {RunState.PUBLISHED, RunState.UPLOADING},
-    RunState.FINAL_VERIFY_FAILED: {RunState.READY_TO_PUBLISH, RunState.UPLOADING, RunState.PUBLISHED},
-    RunState.UPLOADING: {RunState.PUBLISHED},  # must pass UPLOAD_VERIFY first
-}
-
-# Allowed repair transitions - repair always re-enters appropriate QC
-REPAIR_TRANSITIONS: Dict[RunState, RunState] = {
-    RunState.QC1: RunState.QC1_REPAIR,
-    RunState.QC2: RunState.QC2_REPAIR,
-    RunState.FINAL_VERIFY: RunState.RENDERING,  # editorial repair may need full re-render
-}
-
-# After repair, where to go
-POST_REPAIR_TARGET: Dict[RunState, RunState] = {
-    RunState.QC1_REPAIR: RunState.QC1,
-    RunState.QC2_REPAIR: RunState.QC2,
+# EXPLICIT ALLOWED TRANSITIONS (whitelist) - anything not listed = hard failure
+ALLOWED_TRANSITIONS: Dict[RunState, Set[RunState]] = {
+    RunState.RUN_CREATED: {RunState.PREFLIGHT},
+    RunState.PREFLIGHT: {RunState.DISCOVERING, RunState.RUN_FAILED},
+    RunState.DISCOVERING: {RunState.FILTERING, RunState.SCORING, RunState.SHORTLISTED, RunState.DEEP_ANALYSIS, RunState.SELECTED, RunState.RUN_FAILED},
+    RunState.FILTERING: {RunState.SCORING, RunState.SHORTLISTED, RunState.DEEP_ANALYSIS, RunState.SELECTED, RunState.RUN_FAILED},
+    RunState.SCORING: {RunState.SHORTLISTED, RunState.RUN_FAILED},
+    RunState.SHORTLISTED: {RunState.DEEP_ANALYSIS, RunState.RUN_FAILED},
+    RunState.DEEP_ANALYSIS: {RunState.SELECTED, RunState.RUN_FAILED},
+    RunState.SELECTED: {RunState.RESEARCHING, RunState.MEDIA_PREFLIGHT, RunState.TOPIC_DEFERRED},
+    RunState.RESEARCHING: {RunState.CLAIM_VERIFICATION, RunState.TOPIC_DEFERRED},
+    RunState.CLAIM_VERIFICATION: {RunState.HOOK_GENERATION, RunState.TOPIC_DEFERRED},
+    RunState.HOOK_GENERATION: {RunState.SCRIPTING, RunState.TOPIC_DEFERRED},
+    RunState.SCRIPTING: {RunState.SCRIPT_QC, RunState.TOPIC_DEFERRED},
+    RunState.SCRIPT_QC: {RunState.SCENE_PLANNING, RunState.TOPIC_DEFERRED},
+    RunState.SCENE_PLANNING: {RunState.MEDIA_PREFLIGHT, RunState.TOPIC_DEFERRED},
+    RunState.MEDIA_PREFLIGHT: {RunState.MEDIA_HARVEST, RunState.TOPIC_DEFERRED},
+    RunState.MEDIA_HARVEST: {RunState.AUDIO_GENERATION, RunState.TOPIC_DEFERRED},
+    RunState.AUDIO_GENERATION: {RunState.RENDERING, RunState.TOPIC_DEFERRED},
+    RunState.RENDERING: {RunState.QC1, RunState.TOPIC_DEFERRED},
+    RunState.QC1: {RunState.QC2, RunState.QC1_FAILED},
+    RunState.QC1_FAILED: {RunState.QC1_REPAIR, RunState.TOPIC_DEFERRED},
+    RunState.QC1_REPAIR: {RunState.QC1},
+    RunState.QC2: {RunState.FINAL_VERIFY, RunState.QC2_FAILED},
+    RunState.QC2_FAILED: {RunState.QC2_REPAIR, RunState.TOPIC_DEFERRED},
+    RunState.QC2_REPAIR: {RunState.QC1},
+    RunState.FINAL_VERIFY: {RunState.READY_TO_PUBLISH, RunState.FINAL_VERIFY_FAILED},
+    RunState.FINAL_VERIFY_FAILED: {RunState.RENDERING, RunState.TOPIC_DEFERRED},
+    RunState.READY_TO_PUBLISH: {RunState.UPLOADING},
+    RunState.UPLOADING: {RunState.UPLOAD_VERIFY},
+    RunState.UPLOAD_VERIFY: {RunState.PUBLISHED},
+    RunState.PUBLISHED: {RunState.ANALYTICS_PENDING},
+    RunState.ANALYTICS_PENDING: {RunState.LEARNING},
+    RunState.LEARNING: {RunState.COMPLETED},
+    RunState.TOPIC_DEFERRED: {RunState.DISCOVERING, RunState.RUN_FAILED},
+    RunState.RUN_FAILED: set(),
+    RunState.COMPLETED: set(),
 }
 
 
@@ -99,7 +113,7 @@ class StateTransition:
 class RunStateMachine:
     """
     Explicit state machine for a production run.
-    Persists every transition. Enforces forbidden transitions.
+    Persists every transition. Enforces ALLOWED transitions only.
     """
     run_id: str
     current_state: RunState = RunState.RUN_CREATED
@@ -117,7 +131,6 @@ class RunStateMachine:
         self._persist()
 
     def _persist(self):
-        """Save state machine to checkpoint directory."""
         state_file = self.checkpoint_dir / "state_machine.json"
         data = {
             "run_id": self.run_id,
@@ -142,7 +155,6 @@ class RunStateMachine:
 
     @classmethod
     def load(cls, run_id: str) -> "RunStateMachine":
-        """Load state machine from checkpoint."""
         checkpoint_dir = config.storage.state_dir / "runs" / run_id
         state_file = checkpoint_dir / "state_machine.json"
         if not state_file.exists():
@@ -161,19 +173,14 @@ class RunStateMachine:
         )
 
     def transition(self, new_state: RunState, reason: str = "", metadata: Optional[Dict[str, Any]] = None) -> bool:
-        """
-        Attempt state transition. Returns True if allowed, False if forbidden.
-        Raises ValueError if transition is forbidden by law.
-        """
-        # Check forbidden transitions
-        if self.current_state in FORBIDDEN_TRANSITIONS:
-            if new_state in FORBIDDEN_TRANSITIONS[self.current_state]:
-                raise ValueError(
-                    f"FORBIDDEN TRANSITION: {self.current_state.value} → {new_state.value}. "
-                    f"Law 2: No failed stage can advance."
-                )
+        allowed = ALLOWED_TRANSITIONS.get(self.current_state, set())
+        if new_state not in allowed:
+            raise ValueError(
+                f"FORBIDDEN TRANSITION: {self.current_state.value} -> {new_state.value}. "
+                f"Allowed from {self.current_state.value}: {', '.join(s.value for s in allowed)}. "
+                f"Law 2: No failed stage can advance; only explicit whitelisted transitions permitted."
+            )
 
-        # Check repair escalation limit
         if new_state in (RunState.QC1_REPAIR, RunState.QC2_REPAIR):
             self.attempt_count += 1
             if self.attempt_count > self.max_repair_attempts:
@@ -181,7 +188,6 @@ class RunStateMachine:
                 new_state = RunState.TOPIC_DEFERRED
                 reason = f"Max repair attempts exceeded ({self.max_repair_attempts})"
 
-        # Record transition
         transition = StateTransition(
             from_state=self.current_state.value,
             to_state=new_state.value,
@@ -192,24 +198,20 @@ class RunStateMachine:
         self.history.append(transition)
         self.current_state = new_state
         self._persist()
-        log.info(f"STATE: {transition.from_state} → {transition.to_state} [{reason}]")
+        log.info(f"STATE: {transition.from_state} -> {transition.to_state} [{reason}]")
         return True
 
     def can_transition(self, new_state: RunState) -> bool:
-        """Check if transition is allowed without performing it."""
-        if self.current_state in FORBIDDEN_TRANSITIONS:
-            if new_state in FORBIDDEN_TRANSITIONS[self.current_state]:
-                return False
-        return True
+        allowed = ALLOWED_TRANSITIONS.get(self.current_state, set())
+        return new_state in allowed
 
     def enter_repair(self, failure_id: str, severity: str, affected_components: List[str], root_cause: str) -> RunState:
-        """Enter appropriate repair state with failure metadata."""
         if self.current_state == RunState.QC1:
             repair_state = RunState.QC1_REPAIR
         elif self.current_state == RunState.QC2:
             repair_state = RunState.QC2_REPAIR
         elif self.current_state == RunState.FINAL_VERIFY:
-            repair_state = RunState.QC1_REPAIR  # editorial repair may need re-render
+            repair_state = RunState.QC1_REPAIR
         else:
             repair_state = RunState.QC1_REPAIR
 
@@ -225,15 +227,13 @@ class RunStateMachine:
         return repair_state
 
     def post_repair_target(self) -> RunState:
-        """Get the target state after repair completes."""
         if self.current_state == RunState.QC1_REPAIR:
             return RunState.QC1
         elif self.current_state == RunState.QC2_REPAIR:
-            return RunState.QC2
+            return RunState.QC1
         return RunState.QC1
 
     def defer_to_next_topic(self) -> bool:
-        """Try next topic candidate. Returns True if another candidate exists."""
         if self.selected_topic_index + 1 < len(self.topic_candidates):
             self.selected_topic_index += 1
             self.attempt_count = 0
@@ -241,7 +241,3 @@ class RunStateMachine:
             self.transition(RunState.MEDIA_PREFLIGHT, reason=f"Deferred to candidate #{self.selected_topic_index + 1}")
             return True
         return False
-
-
-# Timezone import
-from datetime import timezone

@@ -1,3 +1,4 @@
+
 """
 AI Video Factory - Master Documentary Pipeline Orchestrator
 Autonomous documentary production engine.
@@ -143,13 +144,14 @@ def run_pipeline(dry_run: bool = False, skip_upload: bool = False, skip_qc: bool
             )
             return
         try:
-                    _run_pipeline(dry_run=dry_run, skip_upload=skip_upload, skip_qc=skip_qc, force_topic=force_topic)
+            _run_pipeline(dry_run=dry_run, skip_upload=skip_upload, skip_qc=skip_qc, force_topic=force_topic)
         finally:
             release_production_lock(lock_path)
             # Dry-run must not mutate channel brain or persistent state.
             if not dry_run:
                 save_channel_brain()
                 save_state()
+
 
 def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, skip_qc: bool = False, force_topic: str = None):
     # Initialize state machine
@@ -165,7 +167,7 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, skip_qc: boo
         raise RuntimeError("QC bypass is forbidden in live mode (Law 5)")
 
     state_machine.transition(RunState.PREFLIGHT, reason="Starting preflight validation")
-    
+
     log.info("==========================================================")
     log.info("        AI Video Factory - Documentary Engine             ")
     log.info("==========================================================")
@@ -176,10 +178,10 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, skip_qc: boo
         create_state=not dry_run,
     )
     log.info(config.mask_summary())
-    state_machine.transition(RunState.PREFLIGHT, reason="Preflight passed")
+    # Preflight passed - move to DISCOVERING
+    state_machine.transition(RunState.DISCOVERING, reason="Preflight passed")
 
     # 1. Initialize State & Database
-    state_machine.transition(RunState.DISCOVERING, reason="Initializing state & database")
     if not dry_run:
         load_state()
     init_db()
@@ -205,7 +207,7 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, skip_qc: boo
     log.info(f"Opening Production Run: {file_prefix}")
 
     # 2. Live Channel Analytics
-    state_machine.transition(RunState.DISCOVERING, reason="Syncing channel analytics")
+    state_machine.transition(RunState.FILTERING, reason="Syncing channel analytics")
     if dry_run or skip_upload:
         sync_summary = {"synced_count": 0, "status": "SKIPPED_REVIEW_MODE"}
         log.info("[ANALYTICS] Skipped for dry-run/review mode; no remote calls or DB writes.")
@@ -215,7 +217,7 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, skip_qc: boo
 
     # 3. Topic Discovery & Claim-Oriented Research
     if force_topic:
-        # Forced topic MUST still be grounded in its real Wikipedia source —
+        # Forced topic MUST still be grounded in its real Wikipedia source --
         # hardcoded "convenience" facts are forbidden (zero-hardcoding rule).
         info = fetch_wikipedia_summary(force_topic)
         summary = (info or {}).get("summary", "")
@@ -249,12 +251,14 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, skip_qc: boo
             "media_preflight": preflight_report
         }
     else:
+        state_machine.transition(RunState.SCORING, reason="Discovering candidates")
         candidates = discover_candidates(target_count=config.research.max_topics)
         if not candidates:
             log.error("[RESEARCH EMPTY] Discovery returned zero candidate stories. Pipeline deferred.")
             return
 
         # 3b. Topic Selection & Growth Brain
+        state_machine.transition(RunState.SHORTLISTED, reason="Producing growth brain")
         growth_brain = produce_growth_brain(candidates)
         if not growth_brain or not isinstance(growth_brain, dict):
             log.error("[NOVELTY AUDIT: PIPELINE DEFERRED] No candidate passed 3-level novelty audit. Pipeline deferred.")
@@ -293,14 +297,16 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, skip_qc: boo
         log.error(
             f"[NOVELTY GATE: PIPELINE ABORTED] Topic '{topic_name}' REJECTED.\n"
             f"Reason: {novelty_audit['reason']}\n"
-            f"Duplicate topics and same-angle repeats cannot proceed to recording or production."
+            "Duplicate topics and same-angle repeats cannot proceed to recording or production."
         )
         return
 
-    # 3c. Topic Registration — dry-run performs ZERO production side effects
+    state_machine.transition(RunState.SELECTED, reason="Topic selected")
+
+    # 3c. Topic Registration -- dry-run performs ZERO production side effects
     topic_id = None
     if dry_run:
-        log.info("[DRY RUN] Topic NOT registered — dry-run leaves the production archive untouched.")
+        log.info("[DRY RUN] Topic NOT registered -- dry-run leaves the production archive untouched.")
     else:
         topic_id = record_topic(
             cluster=cluster,
@@ -329,50 +335,57 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, skip_qc: boo
             if len(facts) >= 4:
                 break
 
+    # Research phase
+    state_machine.transition(RunState.RESEARCHING, reason="Researching topic")
+    
+    # Claim verification
+    state_machine.transition(RunState.CLAIM_VERIFICATION, reason="Verifying claims")
+
     # 4. Hook Generation & Scoring (grounded in full source text)
+    state_machine.transition(RunState.HOOK_GENERATION, reason="Generating hooks")
     hook_data = generate_and_score_hooks(topic_name, facts, conflict, source_context=source_text)
     hook_text = hook_data["text"]
     hook_type = hook_data["category"]
 
     # 5. Retention Documentary Script Generation
+    state_machine.transition(RunState.SCRIPTING, reason="Generating script")
     script_data = generate_production_script(topic_name, facts, conflict, hook_text)
     narration = script_data["narration_script"]
     word_count = script_data["word_count"]
 
-    
-    
-
-    # 6. SEO Packaging — runs AFTER narration is verified and finalized
+    # 6. SEO Packaging -- runs AFTER narration is verified and finalized
     # Narration is now in its final form: if regeneration occurred above, this
     # SEO package reflects the corrected script, not the pre-verification draft.
     seo_data = format_seo_package(topic_name, facts, conflict, source_url, file_number)
 
     if dry_run:
-        log.info("[DRY RUN] Plan Formulated — proceeding to full media render & QC verification:")
+        log.info("[DRY RUN] Plan Formulated -- proceeding to full media render & QC verification:")
         log.info(f"  Title: {seo_data['title']}")
         log.info(f"  Hook [{hook_type}]: \"{hook_text}\"")
         log.info(f"  Script ({word_count} words): \"{narration}\"")
-        
 
     # 7. Media Generation: Voice Synthesis
-    raw_voice_path = config.storage.temp_dir / f"{file_prefix}_voice_raw.mp3"
-    word_timings = generate_voice(narration, raw_voice_path)
-    voice_duration = get_media_duration(raw_voice_path)
-    log.info(f"Voice Duration: {voice_duration:.2f}s ({len(word_timings)} words timed)")
+        state_machine.transition(RunState.AUDIO_GENERATION, reason="Generating voice")
+        raw_voice_path = config.storage.temp_dir / f"{file_prefix}_voice_raw.mp3"
+        word_timings = generate_voice(narration, raw_voice_path)
+        voice_duration = get_media_duration(raw_voice_path)
+        log.info(f"Voice Duration: {voice_duration:.2f}s ({len(word_timings)} words timed)")
 
-    # 8. Storyboard Planning / Claim-Local Scene Planning
-    storyboard = generate_storyboard(narration, topic_name, voice_duration)
-    assert config.qc.min_scenes <= len(storyboard) <= config.qc.max_scenes, (
-        f"QC Error: Storyboard scene count ({len(storyboard)}) outside {config.qc.min_scenes}-{config.qc.max_scenes} range!"
-    )
+        # 8. Storyboard Planning / Claim-Local Scene Planning
+        state_machine.transition(RunState.SCENE_PLANNING, reason="Planning scenes")
+        storyboard = generate_storyboard(narration, topic_name, voice_duration)
+        assert config.qc.min_scenes <= len(storyboard) <= config.qc.max_scenes, (
+            f"QC Error: Storyboard scene count ({len(storyboard)}) outside {config.qc.min_scenes}-{config.qc.max_scenes} range!"
+        )
 
-    # 9. Asset Collection: Per-Scene Harvesting & Authentic Evidence Priority
-    images_dir = config.storage.output_dir / f"{file_prefix}_assets"
-    try:
-        scenes_with_assets = collect_storyboard_assets(storyboard, images_dir, file_number, topic=topic_name)
-    except VisualBudgetExceededError as e:
-        log.error(f"[VISUAL BUDGET: PIPELINE DEFERRED] {e}")
-        return
+        # 9. Asset Collection: Per-Scene Harvesting & Authentic Evidence Priority
+        state_machine.transition(RunState.MEDIA_HARVEST, reason="Harvesting assets")
+        images_dir = config.storage.output_dir / f"{file_prefix}_assets"
+        try:
+            scenes_with_assets = collect_storyboard_assets(storyboard, images_dir, file_number, topic=topic_name)
+        except VisualBudgetExceededError as e:
+            log.error(f"[VISUAL BUDGET: PIPELINE DEFERRED] {e}")
+            return
 
     # 9b. Asset Uniqueness Assertions & 5-Tier Deduplication Gates
     assert len(scenes_with_assets) == len(storyboard), "QC Error: Scene count mismatch!"
@@ -398,6 +411,7 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, skip_qc: boo
     manifest_data = load_render_manifest(manifest_path)
 
     # 13. Editorial Motion Compositor (Consumes Manifest ONLY)
+    state_machine.transition(RunState.RENDERING, reason="Rendering video")
     output_video = config.storage.output_dir / f"{file_prefix}_aivf_short.mp4"
     build_composite_video_from_manifest(
         manifest_data=manifest_data,
@@ -420,54 +434,57 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, skip_qc: boo
         return
 
     # 14b. Audio Mastering Verification: measure the ACTUAL mastered loudness
-        measured_lufs = measure_master_loudness(output_video)
-        if measured_lufs is None:
-            log.warning("[AUDIO QC] Master loudness could not be measured — reported as NOT MEASURED.")
-        elif abs(measured_lufs - config.audio.loudnorm_i) > 2.0:
+    measured_lufs = measure_master_loudness(output_video)
+    if measured_lufs is None:
+        log.warning("[AUDIO QC] Master loudness could not be measured -- reported as NOT MEASURED.")
+    elif abs(measured_lufs - config.audio.loudnorm_i) > 2.0:
+        log.error(
+            f"[QC AUDIO FAIL: PIPELINE DEFERRED] Mastered loudness {measured_lufs:.1f} LUFS deviates more than 2 LU from "
+            f"target {config.audio.loudnorm_i} LUFS!"
+        )
+        return
+
+    # 15. L1/L2/L3 Visual QC + Black/Freeze Detection: 3-Layer Visual Verification Pipeline
+    state_machine.transition(RunState.QC1, reason="Running QC1")
+    if not skip_qc:
+        verify_res = verify_scene_clips_and_frames(scenes_with_assets, output_video, scenes_dir)
+        if not verify_res["all_passed"]:
             log.error(
-                f"[QC AUDIO FAIL: PIPELINE DEFERRED] Mastered loudness {measured_lufs:.1f} LUFS deviates more than 2 LU from "
-                f"target {config.audio.loudnorm_i} LUFS!"
+                f"[QC1 FAIL: PIPELINE DEFERRED] 3-Layer Visual Verification failed! "
+                f"(L1: {verify_res['layer1_count']}, L2: {verify_res['layer2_count']}, L3: {verify_res['layer3_count']} of {len(scenes_with_assets)})"
             )
+            # Enter repair flow
+            state_machine.transition(RunState.QC1_FAILED, reason="QC1 failed")
             return
+    else:
+        log.warning("[QC SKIPPED] --skip-qc flag set -- bypassing 3-layer visual verification (DANGEROUS)")
+        verify_res = {
+            "all_passed": True,
+            "layer1_count": len(scenes_with_assets),
+            "layer2_count": len(scenes_with_assets),
+            "layer3_count": len(scenes_with_assets),
+            "black_frame_count": 0,
+            "freeze_frame_count": 0
+        }
 
-        # 15. L1/L2/L3 Visual QC + Black/Freeze Detection: 3-Layer Visual Verification Pipeline
-        if not skip_qc:
-            verify_res = verify_scene_clips_and_frames(scenes_with_assets, output_video, scenes_dir)
-            if not verify_res["all_passed"]:
-                log.error(
-                    f"[QC VISUAL FAIL: PIPELINE DEFERRED] 3-Layer Visual Verification failed! "
-                    f"(L1: {verify_res['layer1_count']}, L2: {verify_res['layer2_count']}, L3: {verify_res['layer3_count']} of {len(scenes_with_assets)})"
-                )
-                return
-        else:
-            log.warning("[QC SKIPPED] --skip-qc flag set — bypassing 3-layer visual verification (DANGEROUS)")
-            verify_res = {
-                "all_passed": True,
-                "layer1_count": len(scenes_with_assets),
-                "layer2_count": len(scenes_with_assets),
-                "layer3_count": len(scenes_with_assets),
-                "black_frame_count": 0,
-                "freeze_frame_count": 0
-            }
+    # 16. Contact Sheet: Storyboard Contact Sheet (from ACTUAL rendered scene clips)
+    contact_sheet_path = generate_contact_sheet(scenes_with_assets, file_number, topic_name, scenes_dir=scenes_dir)
 
-        # 16. Contact Sheet: Storyboard Contact Sheet (from ACTUAL rendered scene clips)
-        contact_sheet_path = generate_contact_sheet(scenes_with_assets, file_number, topic_name, scenes_dir=scenes_dir)
+    log.info("==========================================================")
+    log.info("           🎯 100% QC AUDIT PASSED (ZERO SLUDGE)          ")
+    log.info("==========================================================")
 
+    if dry_run:
         log.info("==========================================================")
-        log.info("           🎯 100% QC AUDIT PASSED (ZERO SLUDGE)          ")
+        log.info("🎯 100% DRY RUN VERIFICATION COMPLETED (ZERO MUTATIONS)")
+        log.info(f"  Master Output:    {output_video}")
+        log.info(f"  Contact Sheet:    {contact_sheet_path}")
+        log.info(f"  Final Duration:   {final_duration:.2f}s")
+        log.info(f"  Audio Loudness:   {'%.1f LUFS' % measured_lufs if measured_lufs is not None else 'NOT MEASURED'}")
+        log.info(f"  Visual QC:        {'PASS' if verify_res['all_passed'] else 'FAIL'} (L1 {verify_res['layer1_count']}/{len(scenes_with_assets)}, L2 {verify_res['layer2_count']}/{len(scenes_with_assets)}, L3 {verify_res['layer3_count']}/{len(scenes_with_assets)})")
+        log.info("  Zero database or YouTube mutations committed.")
         log.info("==========================================================")
-
-        if dry_run:
-            log.info("==========================================================")
-            log.info("🎯 100% DRY RUN VERIFICATION COMPLETED (ZERO MUTATIONS)")
-            log.info(f"  Master Output:    {output_video}")
-            log.info(f"  Contact Sheet:    {contact_sheet_path}")
-            log.info(f"  Final Duration:   {final_duration:.2f}s")
-            log.info(f"  Audio Loudness:   {'%.1f LUFS' % measured_lufs if measured_lufs is not None else 'NOT MEASURED'}")
-            log.info(f"  Visual QC:        {'PASS' if verify_res['all_passed'] else 'FAIL'} (L1 {verify_res['layer1_count']}/{len(scenes_with_assets)}, L2 {verify_res['layer2_count']}/{len(scenes_with_assets)}, L3 {verify_res['layer3_count']}/{len(scenes_with_assets)})")
-            log.info("  Zero database or YouTube mutations committed.")
-            log.info("==========================================================")
-            return
+        return
 
     # 17. Pre-Record Production Row (crash-safe idempotency write-ahead)
     # The video row exists BEFORE the upload so a crash mid-upload leaves an
@@ -518,7 +535,7 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, skip_qc: boo
             log.info(f"  VIDEO NUMBER:     VIDEO #{file_number:03d}")
             log.info(f"  TOPIC:           {topic_name}")
             log.info(f"  NOVELTY:         {novelty_audit['result']}")
-            
+
             log.info(f"  SCENES:          {len(scenes_with_assets)} ({len(unique_urls)} unique source assets)")
             log.info(f"  DURATION:        {final_duration:.2f}s")
             log.info(f"  AUDIO MASTER:    {'%.1f LUFS' % measured_lufs if measured_lufs is not None else 'NOT MEASURED'}")
@@ -584,7 +601,7 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, skip_qc: boo
     for s in scenes_with_assets:
         meta = s["asset_meta"]
         # canonical_url is the stable identity (aivf-generated:// for graphics,
-        # the remote clean URL for harvested assets) — a temp file:// path would
+        # the remote clean URL for harvested assets) -- a temp file:// path would
         # dangle after cleanup.
         stable_source = meta.get("canonical_url") or meta.get("url")
         record_provenance(
@@ -622,7 +639,7 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, skip_qc: boo
     # 24. Relevance Report: Relevance Audit Report
     print("\n" + format_relevance_report(scenes_with_assets))
 
-    # 25. Final Production Report — every status line below is MEASURED, not assumed
+    # 25. Final Production Report -- every status line below is MEASURED, not assumed
     ready_by_str = sched_info["ready_by_deadline_us"].strftime("%Y-%m-%d %H:%M:%S %Z")
     upload_str = sched_info["target_upload_time_us"].strftime("%Y-%m-%d %H:%M:%S %Z")
     actual_comp_str = completion_time_us.strftime("%Y-%m-%d %H:%M:%S %Z")
@@ -649,8 +666,8 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, skip_qc: boo
     accidental_reuse = len(scenes_with_assets) - unique_source_count
     print(f"ASSET STATUS:            {'PASS' if accidental_reuse == 0 else 'FAIL'} ({len(scenes_with_assets)} Scenes | {unique_source_count} Unique Source Assets)")
     print(f"ACCIDENTAL REUSE:        {accidental_reuse} (Strict Zero Allowed)")
-    print(f"GENERATED GRAPHICS:      {gen_graphic_count} of {len(scenes_with_assets)} scenes" + (" [WARNING: >3 generated graphics — relevance gate calibration review recommended]" if gen_graphic_count > 3 else " (Within bounds)"))
-    print(f"RELEVANCE STATUS:        {'PASS (Claim-Level Visual Intent Satisfied)' if gen_graphic_count <= 3 else 'PARTIAL (heavy generated-graphic usage — see warning above)'}")
+    print(f"GENERATED GRAPHICS:      {gen_graphic_count} of {len(scenes_with_assets)} scenes" + (" [WARNING: >3 generated graphics -- relevance gate calibration review recommended]" if gen_graphic_count > 3 else " (Within bounds)"))
+    print(f"RELEVANCE STATUS:        {'PASS (Claim-Level Visual Intent Satisfied)' if gen_graphic_count <= 3 else 'PARTIAL (heavy generated-graphic usage -- see warning above)'}")
     print(f"DEDUP STATUS:            PASS (0 Duplicate URLs / 0 Duplicate SHAs / 0 Duplicate Titles)")
     print(f"RENDER STATUS:           PASS (Editorial Composition + Motion Presets)")
     print(f"AUDIO STATUS:            {lufs_str} (Target: {config.audio.loudnorm_i} LUFS, TP {config.audio.loudnorm_tp} dB)")
@@ -677,22 +694,24 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, skip_qc: boo
         print(f"  [{s['start']:04.1f}s - {s['end']:04.1f}s] Scene {s['scene_id']:02d} | {s['visual_type']:<15} | SHA: {meta['sha256'][:10]}... | Asset: {meta['title'][:32]} (Relevance: {meta.get('relevance_score', 1.0)})")
     print("="*65 + "\n")
 
+
 def main():
     parser = argparse.ArgumentParser(description="AI Video Factory Autonomous Engine")
-    parser.add_argument("--dry-run", action="store_true", default=False, help="Research and storyboard planning only — no render, no upload, no archive side effects")
+    parser.add_argument("--dry-run", action="store_true", default=False, help="Research and storyboard planning only -- no render, no upload, no archive side effects")
     parser.add_argument("--skip-upload", action="store_true", default=False,
                         help="Render video but skip YouTube upload. For local test renders only. "
                              "Has no effect if APP_MODE != production (upload is already skipped).")
     parser.add_argument("--skip-qc", action="store_true", default=False,
                         help="Skip 3-layer visual QC (frame verification, black/freeze detection). DANGEROUS: only for rapid iteration.")
     parser.add_argument("--force-topic", type=str, default=None, help="Force specific topic (still researches its real Wikipedia source; skips discovery)")
-    # REMOVED: --upload  — upload is gated solely by APP_MODE=production in .env.
+    # REMOVED: --upload  -- upload is gated solely by APP_MODE=production in .env.
     #   Setting APP_MODE=production is the one and only way to enable uploads.
     #   There is no CLI flag that can override or bypass the production gate.
-    # REMOVED: --force-publish — the 1-hour readiness guarantee cannot be bypassed from CLI.
+    # REMOVED: --force-publish -- the 1-hour readiness guarantee cannot be bypassed from CLI.
     args = parser.parse_args()
 
     run_pipeline(dry_run=args.dry_run, skip_upload=args.skip_upload, skip_qc=args.skip_qc, force_topic=args.force_topic)
+
 
 if __name__ == "__main__":
     main()

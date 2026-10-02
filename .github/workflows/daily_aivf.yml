@@ -14,11 +14,6 @@ on:
         type: boolean
         default: false
         required: false
-      skip_qc:
-        description: "Skip 3-layer visual QC (faster, DANGEROUS)"
-        type: boolean
-        default: false
-        required: false
 
 # Only one production run at a time; never cancel a run that is mid-upload.
 concurrency:
@@ -150,12 +145,10 @@ jobs:
         run: |
           $live = '${{ vars.AI_VIDEO_FACTORY_LIVE }}' -eq 'true'
           $dryRun = '${{ inputs.dry_run }}' -eq 'true'
-          $skipQc = '${{ inputs.skip_qc }}' -eq 'true'
           $forcedTopic = $env:FORCE_TOPIC.Trim()
           $topicArgs = @()
           if ($forcedTopic) { $topicArgs += @("--force-topic", $forcedTopic) }
           if ($dryRun) { $topicArgs += "--dry-run" }
-          if ($skipQc) { $topicArgs += "--skip-qc" }
 
           if ($live) {
             Write-Host "=========================================================="
