@@ -15,6 +15,7 @@ import argparse
 import tempfile
 from contextlib import contextmanager, nullcontext
 from pathlib import Path
+from datetime import datetime
 from core.config import config
 from core.logging import log
 from core.database import (
@@ -43,6 +44,9 @@ from publisher.youtube import upload_short_to_youtube
 from qc.frame_verifier import verify_scene_clips_and_frames
 from qc.contact_sheet import generate_contact_sheet
 from analytics.sync import sync_channel_analytics
+from core.state_machine import RunStateMachine, RunState
+from core.checkpoint import CheckpointManager
+from core.repair import RepairEngine, RepairEscalationManager, FailureCategory, FailureSeverity
 
 # ---------------------------------------------------------------------------
 # Production Single-Flight Lock (concurrency guard)
@@ -148,6 +152,20 @@ def run_pipeline(dry_run: bool = False, skip_upload: bool = False, skip_qc: bool
                 save_state()
 
 def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, skip_qc: bool = False, force_topic: str = None):
+    # Initialize state machine
+    run_id = datetime.now().strftime("RUN_%Y%m%d_%H%M%S")
+    state_machine = RunStateMachine(run_id=run_id)
+    checkpoint = CheckpointManager(run_id)
+    repair_engine = RepairEngine(run_id, state_machine, checkpoint)
+    escalation = RepairEscalationManager(repair_engine)
+
+    # Block --skip-qc in live mode
+    live_mode = (not dry_run and not skip_upload and config.app.mode == "production")
+    if live_mode and skip_qc:
+        raise RuntimeError("QC bypass is forbidden in live mode (Law 5)")
+
+    state_machine.transition(RunState.PREFLIGHT, reason="Starting preflight validation")
+    
     log.info("==========================================================")
     log.info("        AI Video Factory - Documentary Engine             ")
     log.info("==========================================================")
@@ -158,13 +176,15 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, skip_qc: boo
         create_state=not dry_run,
     )
     log.info(config.mask_summary())
+    state_machine.transition(RunState.PREFLIGHT, reason="Preflight passed")
 
     # 1. Initialize State & Database
+    state_machine.transition(RunState.DISCOVERING, reason="Initializing state & database")
     if not dry_run:
         load_state()
     init_db()
 
-    # 1b. Idempotency Guard: an upload with UNKNOWN outcome must never be retried
+    # 1b. Idempotency Guard
     incomplete_uploads = get_incomplete_upload_attempts()
     if incomplete_uploads:
         for row in incomplete_uploads:
@@ -177,16 +197,15 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, skip_qc: boo
             "YouTube Studio, then either record its video ID in the database or archive the row. "
             "No automatic re-upload will be attempted."
         )
+        state_machine.transition(RunState.RUN_FAILED, reason="Idempotency guard triggered")
         return
 
     file_number = get_next_file_number()
     file_prefix = f"VIDEO_{file_number:03d}"
     log.info(f"Opening Production Run: {file_prefix}")
 
-    # 2. Live Channel Analytics & Self-Learning Feedback Loop
-    # Reads analytics from PREVIOUSLY PUBLISHED videos only (publishAt already passed).
-    # The decision engine updates weights for the NEXT run, not the current run.
-    # yt-dlp is NOT used as a fallback here — own-channel analytics = YouTube Analytics API only.
+    # 2. Live Channel Analytics
+    state_machine.transition(RunState.DISCOVERING, reason="Syncing channel analytics")
     if dry_run or skip_upload:
         sync_summary = {"synced_count": 0, "status": "SKIPPED_REVIEW_MODE"}
         log.info("[ANALYTICS] Skipped for dry-run/review mode; no remote calls or DB writes.")
@@ -431,24 +450,24 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, skip_qc: boo
                 "freeze_frame_count": 0
             }
 
-    # 16. Contact Sheet: Storyboard Contact Sheet (from ACTUAL rendered scene clips)
-    contact_sheet_path = generate_contact_sheet(scenes_with_assets, file_number, topic_name, scenes_dir=scenes_dir)
+        # 16. Contact Sheet: Storyboard Contact Sheet (from ACTUAL rendered scene clips)
+        contact_sheet_path = generate_contact_sheet(scenes_with_assets, file_number, topic_name, scenes_dir=scenes_dir)
 
-    log.info("==========================================================")
-    log.info("           🎯 100% QC AUDIT PASSED (ZERO SLUDGE)          ")
-    log.info("==========================================================")
+        log.info("==========================================================")
+        log.info("           🎯 100% QC AUDIT PASSED (ZERO SLUDGE)          ")
+        log.info("==========================================================")
 
-    if dry_run:
-        log.info("==========================================================")
-        log.info("🎯 100% DRY RUN VERIFICATION COMPLETED (ZERO MUTATIONS)")
-        log.info(f"  Master Output:    {output_video}")
-        log.info(f"  Contact Sheet:    {contact_sheet_path}")
-        log.info(f"  Final Duration:   {final_duration:.2f}s")
-        log.info(f"  Audio Loudness:   {'%.1f LUFS' % measured_lufs if measured_lufs is not None else 'NOT MEASURED'}")
-        log.info(f"  Visual QC:        {'PASS' if verify_res['all_passed'] else 'FAIL'} (L1 {verify_res['layer1_count']}/{len(scenes_with_assets)}, L2 {verify_res['layer2_count']}/{len(scenes_with_assets)}, L3 {verify_res['layer3_count']}/{len(scenes_with_assets)})")
-        log.info("  Zero database or YouTube mutations committed.")
-        log.info("==========================================================")
-        return
+        if dry_run:
+            log.info("==========================================================")
+            log.info("🎯 100% DRY RUN VERIFICATION COMPLETED (ZERO MUTATIONS)")
+            log.info(f"  Master Output:    {output_video}")
+            log.info(f"  Contact Sheet:    {contact_sheet_path}")
+            log.info(f"  Final Duration:   {final_duration:.2f}s")
+            log.info(f"  Audio Loudness:   {'%.1f LUFS' % measured_lufs if measured_lufs is not None else 'NOT MEASURED'}")
+            log.info(f"  Visual QC:        {'PASS' if verify_res['all_passed'] else 'FAIL'} (L1 {verify_res['layer1_count']}/{len(scenes_with_assets)}, L2 {verify_res['layer2_count']}/{len(scenes_with_assets)}, L3 {verify_res['layer3_count']}/{len(scenes_with_assets)})")
+            log.info("  Zero database or YouTube mutations committed.")
+            log.info("==========================================================")
+            return
 
     # 17. Pre-Record Production Row (crash-safe idempotency write-ahead)
     # The video row exists BEFORE the upload so a crash mid-upload leaves an
