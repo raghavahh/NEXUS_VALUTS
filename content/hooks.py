@@ -60,11 +60,11 @@ STRICT FACTUAL GROUNDING RULES:
 5. Keep each hook under 16 words. Punchy, authentic, and cinematic.
 
 Return raw JSON only (no markdown fences):
-{
+{{
   "candidate_hooks": [
-    {"category": "CONTRADICTION", "hook": "..."}
+    {{"category": "CONTRADICTION", "hook": "..."}}
   ]
-}
+}}
 """
 
 def generate_and_score_hooks(topic: str, facts: List[str], conflict: str, source_context: str = "") -> Dict[str, Any]:

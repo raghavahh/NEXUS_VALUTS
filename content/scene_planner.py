@@ -96,7 +96,7 @@ CRITICAL ANTI-DRIFT RULES (NON-NEGOTIABLE):
 8. `visual_purpose` MUST be one of: """ + ", ".join(VISUAL_PURPOSES) + """.
 9. `visual_type` MUST be one of: """ + ", ".join(VISUAL_TYPES) + """.
 10. Return raw JSON array of scene objects ONLY (no markdown fences). Each scene object:
-{
+{{
   "scene_id": 1,
   "start": 0.0,
   "end": 3.2,
@@ -115,7 +115,7 @@ CRITICAL ANTI-DRIFT RULES (NON-NEGOTIABLE):
   "transition_in": "hard_cut",
   "transition_out": "hard_cut",
   "audio_intent": "major_reveal|evidence_hit|normal"
-}
+}}
 
 FORMAT INSTRUCTIONS:
 - The output MUST be a valid JSON array.
@@ -381,6 +381,10 @@ def _split_into_scene_claims(script: str, num_scenes: int, topic: str) -> List[s
     Divides script into num_scenes distinct claims at natural clause/sentence boundaries.
     Guarantees entities like 'New York' or 'Pack Ice' are never fractured across scene boundaries.
     """
+    from core.channel_brain import get_channel_brain
+    brain = get_channel_brain()
+    channel_name_lower = (brain.profile.name or "AI Video Factory").lower()
+    
     clean = re.sub(r'\s+', ' ', script).strip()
     # Protect compound entities and noble/particle names from awkward mid-word splitting
     protected = re.sub(

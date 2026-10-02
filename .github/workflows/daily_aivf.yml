@@ -9,6 +9,16 @@ on:
         type: string
         default: ""
         required: false
+      dry_run:
+        description: "Full render + QC, no DB commits, no upload"
+        type: boolean
+        default: false
+        required: false
+      skip_qc:
+        description: "Skip 3-layer visual QC (faster, DANGEROUS)"
+        type: boolean
+        default: false
+        required: false
 
 # Only one production run at a time; never cancel a run that is mid-upload.
 concurrency:
@@ -86,18 +96,37 @@ jobs:
           python-version: "3.12"
           cache: pip
 
+      - name: Cache Chocolatey
+        id: choco-cache
+        uses: actions/cache@v4
+        with:
+          path: C:\ProgramData\chocolatey
+          key: choco-${{ runner.os }}-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            choco-${{ runner.os }}-
+
       - name: Install dependencies & FFmpeg
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
           python -m pip install yt-dlp tzdata
           if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
-            Write-Host "Installing ffmpeg via chocolatey..."
-            choco install ffmpeg -y --no-progress
+            if ('${{ steps.choco-cache.outputs.cache-hit }}' -ne 'true') {
+              Write-Host "Installing ffmpeg via chocolatey..."
+              choco install ffmpeg -y --no-progress
+            } else {
+              Write-Host "Using cached Chocolatey/FFmpeg."
+            }
           } else {
             Write-Host "ffmpeg is already pre-installed on this runner."
           }
           ffmpeg -version | Select-Object -First 1
+
+      - name: Preflight Validation
+        run: python tests/test_preflight.py
+
+      - name: Hardcoding Audit
+        run: python tests/test_audit.py
 
       - name: Restore state
         run: |
@@ -120,8 +149,13 @@ jobs:
           FORCE_TOPIC: ${{ inputs.force_topic }}
         run: |
           $live = '${{ vars.AI_VIDEO_FACTORY_LIVE }}' -eq 'true'
+          $dryRun = '${{ inputs.dry_run }}' -eq 'true'
+          $skipQc = '${{ inputs.skip_qc }}' -eq 'true'
           $forcedTopic = $env:FORCE_TOPIC.Trim()
-          $topicArgs = if ($forcedTopic) { @("--force-topic", $forcedTopic) } else { @() }
+          $topicArgs = @()
+          if ($forcedTopic) { $topicArgs += @("--force-topic", $forcedTopic) }
+          if ($dryRun) { $topicArgs += "--dry-run" }
+          if ($skipQc) { $topicArgs += "--skip-qc" }
 
           if ($live) {
             Write-Host "=========================================================="

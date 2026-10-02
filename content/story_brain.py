@@ -46,12 +46,12 @@ STRICT WORD COUNT RULES:
 NO FILLER: No "Welcome back", no "Like and subscribe", no "Did you know".
 
 Return raw JSON only (no markdown fences):
-{
+{{
   "narration_script": "Write the complete {target_words}-word spoken narration here starting with the hook without placeholders or ellipsis.",
   "word_count": {target_words},
   "core_anomaly": "{conflict}",
   "unresolved_question": "What actually happened to {topic}?"
-}
+}}
 """
 
 def generate_production_script(

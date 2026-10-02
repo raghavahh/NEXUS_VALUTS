@@ -12,6 +12,8 @@ import re
 import time
 import shutil
 import argparse
+import tempfile
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 from core.config import config
 from core.logging import log
@@ -49,10 +51,10 @@ from analytics.sync import sync_channel_analytics
 # ---------------------------------------------------------------------------
 LOCK_STALE_HOURS = 6  # a lock older than this is considered abandoned
 
-def acquire_production_lock():
+def acquire_production_lock(lock_root: Path = None):
     """Returns (acquired: bool, lock_path). Uses atomic O_CREAT|O_EXCL creation."""
     # Honors AIVF_TEST_SANDBOX so isolated tests never touch production lock state.
-    state_root = os.getenv("AI_VIDEO_FACTORY_TEST_SANDBOX") or str(config.storage.base_dir)
+    state_root = lock_root or os.getenv("AI_VIDEO_FACTORY_TEST_SANDBOX") or str(config.storage.base_dir)
     lock_dir = Path(state_root) / ".factory_state"
     lock_dir.mkdir(exist_ok=True)
     lock_path = lock_dir / "production.lock"
@@ -104,39 +106,62 @@ def cleanup_intermediate_files(file_prefix: str, file_number: int):
     if scenes_dir.exists():
         shutil.rmtree(scenes_dir, ignore_errors=True)
 
-def run_pipeline(dry_run: bool = False, skip_upload: bool = False, force_topic: str = None):
+@contextmanager
+def _dry_run_database():
+    """Run dry-run reads and schema writes against a disposable DB copy."""
+    original_db = config.storage.database_path
+    with tempfile.TemporaryDirectory(prefix="aivf_dry_run_") as temp_root:
+        temp_db = Path(temp_root) / "channel.db"
+        if original_db.exists():
+            shutil.copy2(original_db, temp_db)
+        object.__setattr__(config.storage, "database_path", temp_db)
+        try:
+            yield Path(temp_root)
+        finally:
+            object.__setattr__(config.storage, "database_path", original_db)
+
+
+def run_pipeline(dry_run: bool = False, skip_upload: bool = False, skip_qc: bool = False, force_topic: str = None):
     """
     Autonomous production entrypoint.
     - Single-flight: a production lock prevents overlapping runs.
     - Crash-safe: state (save_state) is persisted on EVERY exit path and the
       lock is always released.
     """
-    lock_ok, lock_path = acquire_production_lock()
-    if not lock_ok:
-        log.warning(
-            "[CONCURRENCY GUARD: RUN DEFERRED] Another production run appears active "
-            f"(lock: {lock_path}). Overlapping runs could create duplicate file numbers, "
-            "duplicate uploads, or corrupt state. This run defers."
-        )
-        return
-    try:
-        _run_pipeline(dry_run=dry_run, skip_upload=skip_upload, force_topic=force_topic)
-    finally:
-        release_production_lock(lock_path)
-        save_channel_brain()
-        save_state()
+    isolation = _dry_run_database() if dry_run else nullcontext(None)
+    with isolation as dry_root:
+        lock_ok, lock_path = acquire_production_lock(dry_root)
+        if not lock_ok:
+            log.warning(
+                "[CONCURRENCY GUARD: RUN DEFERRED] Another production run appears active "
+                f"(lock: {lock_path}). Overlapping runs could create duplicate file numbers, "
+                "duplicate uploads, or corrupt state. This run defers."
+            )
+            return
+        try:
+                    _run_pipeline(dry_run=dry_run, skip_upload=skip_upload, skip_qc=skip_qc, force_topic=force_topic)
+        finally:
+            release_production_lock(lock_path)
+            # Dry-run must not mutate channel brain or persistent state.
+            if not dry_run:
+                save_channel_brain()
+                save_state()
 
-def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, force_topic: str = None):
+def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, skip_qc: bool = False, force_topic: str = None):
     log.info("==========================================================")
     log.info("        AI Video Factory - Documentary Engine             ")
     log.info("==========================================================")
 
     # 0. Validate Configuration & Security Audit
-    config.validate()
+    config.validate(
+        require_youtube=(not dry_run and not skip_upload and config.app.mode == "production"),
+        create_state=not dry_run,
+    )
     log.info(config.mask_summary())
 
     # 1. Initialize State & Database
-    load_state()
+    if not dry_run:
+        load_state()
     init_db()
 
     # 1b. Idempotency Guard: an upload with UNKNOWN outcome must never be retried
@@ -162,7 +187,11 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, force_topic:
     # Reads analytics from PREVIOUSLY PUBLISHED videos only (publishAt already passed).
     # The decision engine updates weights for the NEXT run, not the current run.
     # yt-dlp is NOT used as a fallback here — own-channel analytics = YouTube Analytics API only.
-    sync_summary = sync_channel_analytics()
+    if dry_run or skip_upload:
+        sync_summary = {"synced_count": 0, "status": "SKIPPED_REVIEW_MODE"}
+        log.info("[ANALYTICS] Skipped for dry-run/review mode; no remote calls or DB writes.")
+    else:
+        sync_summary = sync_channel_analytics()
     log.info(f"Channel Intelligence: Synced {sync_summary.get('synced_count', 0)} live metrics into Decision Engine.")
 
     # 3. Topic Discovery & Claim-Oriented Research
@@ -372,24 +401,35 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, force_topic:
         return
 
     # 14b. Audio Mastering Verification: measure the ACTUAL mastered loudness
-    measured_lufs = measure_master_loudness(output_video)
-    if measured_lufs is None:
-        log.warning("[AUDIO QC] Master loudness could not be measured — reported as NOT MEASURED.")
-    elif abs(measured_lufs - config.audio.loudnorm_i) > 2.0:
-        log.error(
-            f"[QC AUDIO FAIL: PIPELINE DEFERRED] Mastered loudness {measured_lufs:.1f} LUFS deviates more than 2 LU from "
-            f"target {config.audio.loudnorm_i} LUFS!"
-        )
-        return
+        measured_lufs = measure_master_loudness(output_video)
+        if measured_lufs is None:
+            log.warning("[AUDIO QC] Master loudness could not be measured — reported as NOT MEASURED.")
+        elif abs(measured_lufs - config.audio.loudnorm_i) > 2.0:
+            log.error(
+                f"[QC AUDIO FAIL: PIPELINE DEFERRED] Mastered loudness {measured_lufs:.1f} LUFS deviates more than 2 LU from "
+                f"target {config.audio.loudnorm_i} LUFS!"
+            )
+            return
 
-    # 15. L1/L2/L3 Visual QC + Black/Freeze Detection: 3-Layer Visual Verification Pipeline
-    verify_res = verify_scene_clips_and_frames(scenes_with_assets, output_video, scenes_dir)
-    if not verify_res["all_passed"]:
-        log.error(
-            f"[QC VISUAL FAIL: PIPELINE DEFERRED] 3-Layer Visual Verification failed! "
-            f"(L1: {verify_res['layer1_count']}, L2: {verify_res['layer2_count']}, L3: {verify_res['layer3_count']} of {len(scenes_with_assets)})"
-        )
-        return
+        # 15. L1/L2/L3 Visual QC + Black/Freeze Detection: 3-Layer Visual Verification Pipeline
+        if not skip_qc:
+            verify_res = verify_scene_clips_and_frames(scenes_with_assets, output_video, scenes_dir)
+            if not verify_res["all_passed"]:
+                log.error(
+                    f"[QC VISUAL FAIL: PIPELINE DEFERRED] 3-Layer Visual Verification failed! "
+                    f"(L1: {verify_res['layer1_count']}, L2: {verify_res['layer2_count']}, L3: {verify_res['layer3_count']} of {len(scenes_with_assets)})"
+                )
+                return
+        else:
+            log.warning("[QC SKIPPED] --skip-qc flag set — bypassing 3-layer visual verification (DANGEROUS)")
+            verify_res = {
+                "all_passed": True,
+                "layer1_count": len(scenes_with_assets),
+                "layer2_count": len(scenes_with_assets),
+                "layer3_count": len(scenes_with_assets),
+                "black_frame_count": 0,
+                "freeze_frame_count": 0
+            }
 
     # 16. Contact Sheet: Storyboard Contact Sheet (from ACTUAL rendered scene clips)
     contact_sheet_path = generate_contact_sheet(scenes_with_assets, file_number, topic_name, scenes_dir=scenes_dir)
@@ -480,9 +520,17 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, force_topic:
             )
             if upload_res and upload_res.get("video_id"):
                 youtube_id = upload_res["video_id"]
-                upload_status = upload_res.get("upload_status", "SCHEDULED")
-                # Persist the confirmed ID immediately — closes the crash window
+                verified = bool(upload_res.get("verified"))
+                upload_status = upload_res.get("upload_status", "SCHEDULED") if verified else "UPLOAD_UNVERIFIED"
+                # Persist the returned ID even if the follow-up lookup is not
+                # indexed yet. This blocks a dangerous duplicate re-upload.
                 update_video_upload(file_number, youtube_id, upload_status, target_publish_iso)
+                if not verified:
+                    log.error(
+                        f"[UPLOAD UNVERIFIED] YouTube accepted VIDEO #{file_number:03d} as {youtube_id}, "
+                        "but post-upload verification did not confirm its status. Automatic re-upload is blocked; "
+                        "verify it manually in YouTube Studio."
+                    )
             else:
                 upload_status = "DEFERRED_UPLOAD_FAILED"
                 set_upload_status(file_number, upload_status)
@@ -537,7 +585,13 @@ def _run_pipeline(dry_run: bool = False, skip_upload: bool = False, force_topic:
         content_pillar=cluster,
         duration_sec=final_duration,
         youtube_video_id=youtube_id,
-        status="scheduled" if youtube_id else ("deferred" if not ready_for_upload else "rendered")
+        status=(
+            "published" if upload_status == "PUBLISHED_LIVE" else
+            "scheduled" if upload_status == "SCHEDULED" else
+            "uploaded_unverified" if youtube_id else
+            "deferred" if not ready_for_upload else
+            "rendered"
+        )
     )
 
     # 22. Cleanup: Intermediate Cleanup
@@ -610,6 +664,8 @@ def main():
     parser.add_argument("--skip-upload", action="store_true", default=False,
                         help="Render video but skip YouTube upload. For local test renders only. "
                              "Has no effect if APP_MODE != production (upload is already skipped).")
+    parser.add_argument("--skip-qc", action="store_true", default=False,
+                        help="Skip 3-layer visual QC (frame verification, black/freeze detection). DANGEROUS: only for rapid iteration.")
     parser.add_argument("--force-topic", type=str, default=None, help="Force specific topic (still researches its real Wikipedia source; skips discovery)")
     # REMOVED: --upload  — upload is gated solely by APP_MODE=production in .env.
     #   Setting APP_MODE=production is the one and only way to enable uploads.
@@ -617,7 +673,7 @@ def main():
     # REMOVED: --force-publish — the 1-hour readiness guarantee cannot be bypassed from CLI.
     args = parser.parse_args()
 
-    run_pipeline(dry_run=args.dry_run, skip_upload=args.skip_upload, force_topic=args.force_topic)
+    run_pipeline(dry_run=args.dry_run, skip_upload=args.skip_upload, skip_qc=args.skip_qc, force_topic=args.force_topic)
 
 if __name__ == "__main__":
     main()
